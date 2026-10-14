@@ -14,6 +14,14 @@ class RetryDecision:
     quarantined: bool
 
 
+@dataclass(frozen=True)
+class QuarantineEvent:
+    request_id: str
+    action: str
+    occurred_at: float
+    attempt_count: int
+
+
 class RetryPolicyStore:
     """Persist retry scheduling separately from delivery implementation details.
 
@@ -28,6 +36,11 @@ class RetryPolicyStore:
                 "CREATE TABLE IF NOT EXISTS outbox_retry ("
                 "request_id TEXT PRIMARY KEY, attempt_count INTEGER NOT NULL DEFAULT 0, "
                 "next_attempt_at REAL, quarantined INTEGER NOT NULL DEFAULT 0)"
+            )
+            connection.execute(
+                "CREATE TABLE IF NOT EXISTS quarantine_audit ("
+                "event_id INTEGER PRIMARY KEY AUTOINCREMENT, request_id TEXT NOT NULL, "
+                "action TEXT NOT NULL, occurred_at REAL NOT NULL, attempt_count INTEGER NOT NULL)"
             )
 
     def _connect(self) -> sqlite3.Connection:
@@ -97,3 +110,46 @@ class RetryPolicyStore:
                 "WHERE quarantined = 1 ORDER BY request_id"
             ).fetchall()
         return [RetryDecision(str(request_id), int(attempt_count), None, True) for request_id, attempt_count in rows]
+
+    def replay_quarantined(self, request_id: str, *, now: float | None = None) -> RetryDecision:
+        """Return one quarantined message to eligibility without resetting attempts."""
+        current_time = time.time() if now is None else now
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                "SELECT attempt_count, quarantined FROM outbox_retry WHERE request_id = ?",
+                (request_id,),
+            ).fetchone()
+            if row is None or not bool(row[1]):
+                connection.rollback()
+                raise ValueError("request is not quarantined")
+            attempt_count = int(row[0])
+            connection.execute(
+                "UPDATE outbox_retry SET next_attempt_at = ?, quarantined = 0 WHERE request_id = ?",
+                (current_time, request_id),
+            )
+            connection.execute(
+                "INSERT INTO quarantine_audit (request_id, action, occurred_at, attempt_count) "
+                "VALUES (?, 'replay', ?, ?)",
+                (request_id, current_time, attempt_count),
+            )
+            connection.commit()
+        return RetryDecision(request_id, attempt_count, current_time, False)
+
+    def quarantine_events(self, request_id: str | None = None) -> list[QuarantineEvent]:
+        """Return replay audit events, optionally scoped to one synthetic request."""
+        query = (
+            "SELECT request_id, action, occurred_at, attempt_count "
+            "FROM quarantine_audit"
+        )
+        parameters: tuple[str, ...] = ()
+        if request_id is not None:
+            query += " WHERE request_id = ?"
+            parameters = (request_id,)
+        query += " ORDER BY event_id"
+        with self._connect() as connection:
+            rows = connection.execute(query, parameters).fetchall()
+        return [
+            QuarantineEvent(str(row[0]), str(row[1]), float(row[2]), int(row[3]))
+            for row in rows
+        ]
