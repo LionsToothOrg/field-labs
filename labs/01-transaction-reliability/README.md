@@ -2,7 +2,7 @@
 
 ## Question
 
-A caller times out after sending a state-changing request and retries with the same request identifier. If attempts overlap, can a check-then-write implementation apply the change twice? What changes when the idempotency boundary must survive restart, and how can local state safely record and dispatch an intent for a separate side effect when multiple workers are present?
+A caller times out after sending a state-changing request and retries with the same request identifier. If attempts overlap, can a check-then-write implementation apply the change twice? What changes when the idempotency boundary must survive restart, and how can local state safely record, dispatch, retry, quarantine, and selectively replay an intent for a separate side effect when multiple workers are present?
 
 ## Synthetic scenario
 
@@ -16,7 +16,7 @@ The intentionally unsafe implementation checks whether the request was seen, pau
 
 `OutboxLedger` adds one more boundary. The local state change and a synthetic side-effect intent are committed in the same transaction. Dispatch workers atomically claim pending intents with time-bounded leases before delivery. Successful delivery is acknowledged by the worker that owns the claim; failed delivery records retry state before releasing the claim. An abandoned claim becomes available after its lease expires.
 
-`RetryPolicyStore` persists attempt counts, schedules deterministic exponential backoff, and quarantines a synthetic message when its configured attempt limit is reached. The outbox claim path enforces that state, so deferred or quarantined work is not eligible for delivery.
+`RetryPolicyStore` persists attempt counts, schedules deterministic exponential backoff, and quarantines a synthetic message when its configured attempt limit is reached. The outbox claim path enforces that state, so deferred or quarantined work is not eligible for delivery. A selected quarantined message can be replayed without erasing its attempt history, and an audit event is committed with that replay decision.
 
 ## Run the validation
 
@@ -26,7 +26,7 @@ From the repository root:
 python -m unittest discover -s labs/01-transaction-reliability/tests -v
 ```
 
-The suite covers the unsafe race, process-local idempotency, durable restart/concurrency/failure behavior, the transactional outbox boundary, concurrent outbox worker leases, and retry lifecycle behavior. Outbox and retry cases verify that:
+The suite covers the unsafe race, process-local idempotency, durable restart/concurrency/failure behavior, the transactional outbox boundary, concurrent outbox worker leases, retry lifecycle behavior, and controlled quarantine replay. It verifies that:
 
 - committed state and its side-effect intent both survive restart;
 - a successful synthetic delivery is acknowledged and removed from the pending set;
@@ -38,17 +38,24 @@ The suite covers the unsafe race, process-local idempotency, durable restart/con
 - retry delays grow deterministically with each failed attempt;
 - retry state survives restart;
 - a message is quarantined when its configured attempt limit is reached;
-- deferred or quarantined work is skipped by subsequent claims.
+- deferred or quarantined work is skipped by subsequent claims;
+- replay restores eligibility without resetting attempt history;
+- accepted replay creates a durable audit event; and
+- a replayed message that fails again at the limit returns to quarantine.
 
-## What this establishes
+## Findings
 
-An idempotency key is not enough when duplicate detection and mutation are separate raceable operations. Correctness requires a boundary that owns both decisions.
+The experiment establishes a progression of increasingly durable boundaries:
 
-The durable model also shows why recording a request key separately from the mutation is dangerous: a crash between those writes can suppress a legitimate retry. Keeping them in one transaction makes the local changes commit or roll back together.
+1. **Check-then-write is raceable.** Two overlapping callers can both pass duplicate detection before either records completion.
+2. **The invariant needs one owner.** An in-process critical section fixes the demonstrated thread race, but its memory disappears on restart.
+3. **Durability moves the boundary into the transaction.** The request key and state mutation must commit together so a crash cannot leave them disagreeing.
+4. **Local state and side-effect intent can be atomic even when remote delivery cannot.** The transactional outbox records both locally, then dispatches later.
+5. **Concurrent dispatch needs bounded ownership.** Worker leases prevent simultaneous ownership while allowing abandoned work to become claimable again.
+6. **Failure policy is part of dispatch correctness.** Persisting retry state before releasing a lease prevents immediate hot-loop retries; claim-time eligibility enforces backoff and quarantine.
+7. **Recovery should preserve failure history.** Controlled replay can make one quarantined message eligible again without pretending its previous attempts never happened, while a transactional audit event records the decision.
 
-The outbox model extends that reasoning to side effects. Local state and an intent can be atomic even when the eventual delivery cannot be. Worker leases add bounded ownership so concurrent dispatchers can coordinate without holding a database transaction open across delivery, while expired leases make abandoned work recoverable.
-
-The retry lifecycle connects delivery failure to scheduling: a failed attempt persists its retry decision before releasing ownership, and future claims enforce backoff or quarantine. That prevents an immediate hot loop while keeping the policy state durable across worker restarts.
+Together these slices demonstrate the local reliability model the lab set out to investigate without claiming stronger distributed guarantees than the evidence supports.
 
 ## Important delivery boundary
 
@@ -58,10 +65,10 @@ That is an at-least-once boundary. A real consumer would need its own idempotenc
 
 Lease expiry also assumes workers have a sufficiently consistent notion of time. This local model accepts an injectable timestamp for deterministic recovery tests; it does not attempt to solve distributed clock skew.
 
-The retry model deliberately uses deterministic exponential backoff so exact timing can be asserted. Production retry systems commonly add jitter to reduce synchronized retry storms. Quarantine here is a local state transition, not a production dead-letter queue or an operator workflow.
+The retry model deliberately uses deterministic exponential backoff so exact timing can be asserted. Production retry systems commonly add jitter to reduce synchronized retry storms. Quarantine and replay here are local state transitions, not a production dead-letter queue or administrative system.
 
-## Limitations and next experiment
+## Limitations
 
-This is still a local SQLite model with synchronous synthetic delivery. It does not demonstrate a distributed database, broker visibility timeouts, lease renewal for long-running work, jittered backoff, a real dead-letter queue, replay tooling, ordering, request-key expiration, response replay, or exactly-once remote side effects.
+This is a local SQLite model with synchronous synthetic delivery. It does not demonstrate a distributed database, broker visibility timeouts, lease renewal for long-running work, jittered backoff, a real dead-letter queue, operator authorization or approval policy, replay reasons, retention, bulk replay, distributed audit storage, ordering, request-key expiration, response replay, or exactly-once remote side effects.
 
-A useful next slice is an explicit, auditable quarantine inspection and replay workflow that can return selected synthetic messages to eligibility without weakening the retry-attempt history or worker-lease guarantees.
+Those are valid follow-up experiments, but extending this lab into all of them would blur its question. Lab 01 stops here with a tested local model spanning duplicate-request reproduction through durable recovery. See [QUARANTINE.md](QUARANTINE.md) for the replay boundary.
