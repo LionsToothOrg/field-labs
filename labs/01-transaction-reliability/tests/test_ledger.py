@@ -1,5 +1,6 @@
 import importlib.util
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from threading import Barrier, Thread
 import unittest
 
@@ -69,6 +70,57 @@ class TransactionReliabilityTests(unittest.TestCase):
         self.assertTrue(first.applied)
         self.assertFalse(retry.applied)
         self.assertEqual(25, subject.balance)
+
+
+class DurableTransactionReliabilityTests(unittest.TestCase):
+    def test_duplicate_is_ignored_after_restart(self) -> None:
+        with TemporaryDirectory() as directory:
+            database = Path(directory) / "ledger.db"
+            first_process = ledger.DurableLedger(database)
+            applied = first_process.apply("req-demo-001", 25)
+
+            restarted_process = ledger.DurableLedger(database)
+            retry = restarted_process.apply("req-demo-001", 25)
+
+            self.assertTrue(applied.applied)
+            self.assertFalse(retry.applied)
+            self.assertEqual(25, restarted_process.balance())
+
+    def test_concurrent_duplicate_is_committed_once(self) -> None:
+        with TemporaryDirectory() as directory:
+            subject = ledger.DurableLedger(Path(directory) / "ledger.db")
+            start = Barrier(3)
+            results = []
+
+            def submit() -> None:
+                start.wait()
+                results.append(subject.apply("req-demo-001", 25))
+
+            workers = [Thread(target=submit), Thread(target=submit)]
+            for worker in workers:
+                worker.start()
+            start.wait()
+            for worker in workers:
+                worker.join(timeout=5)
+
+            self.assertTrue(all(not worker.is_alive() for worker in workers))
+            self.assertEqual(25, subject.balance())
+            self.assertEqual(1, sum(result.applied for result in results))
+
+    def test_failed_transaction_does_not_consume_request_key(self) -> None:
+        with TemporaryDirectory() as directory:
+            subject = ledger.DurableLedger(Path(directory) / "ledger.db")
+
+            def fail_before_mutation() -> None:
+                raise RuntimeError("synthetic failure before mutation")
+
+            with self.assertRaisesRegex(RuntimeError, "synthetic failure"):
+                subject.apply("req-demo-001", 25, fail_before_mutation)
+
+            retry = subject.apply("req-demo-001", 25)
+
+            self.assertTrue(retry.applied)
+            self.assertEqual(25, subject.balance())
 
 
 if __name__ == "__main__":
