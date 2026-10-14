@@ -1,12 +1,14 @@
 import importlib.util
 from pathlib import Path
+import sys
 import unittest
 
 
 MODULE_PATH = Path(__file__).resolve().parents[1] / "boundary.py"
 spec = importlib.util.spec_from_file_location("ai_boundary", MODULE_PATH)
-boundary = importlib.util.module_from_spec(spec)
 assert spec and spec.loader
+boundary = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = boundary
 spec.loader.exec_module(boundary)
 
 
