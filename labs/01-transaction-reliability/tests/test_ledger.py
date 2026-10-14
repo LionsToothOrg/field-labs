@@ -138,7 +138,7 @@ class TransactionalOutboxTests(unittest.TestCase):
             self.assertEqual([ledger.OutboxMessage("req-demo-001", 25)], delivered)
             self.assertEqual([], subject.pending())
 
-    def test_failed_delivery_leaves_message_for_retry(self) -> None:
+    def test_failed_delivery_is_deferred_then_recoverable(self) -> None:
         with TemporaryDirectory() as directory:
             subject = ledger.OutboxLedger(Path(directory) / "ledger.db")
             subject.apply("req-demo-001", 25)
@@ -147,12 +147,12 @@ class TransactionalOutboxTests(unittest.TestCase):
                 raise RuntimeError("synthetic downstream failure")
 
             with self.assertRaisesRegex(RuntimeError, "synthetic downstream"):
-                subject.dispatch(fail_delivery)
+                subject.dispatch(fail_delivery, base_backoff_seconds=60.0)
 
-            delivered = []
-            count = subject.dispatch(delivered.append)
-            self.assertEqual(1, count)
-            self.assertEqual([ledger.OutboxMessage("req-demo-001", 25)], delivered)
+            self.assertIsNone(subject.claim("worker-immediate"))
+            recovered = subject.claim("worker-later", now=10**12)
+            self.assertEqual(ledger.OutboxMessage("req-demo-001", 25), recovered)
+            self.assertTrue(subject.acknowledge("worker-later", "req-demo-001"))
             self.assertEqual([], subject.pending())
 
     def test_duplicate_request_creates_one_outbox_intent(self) -> None:
