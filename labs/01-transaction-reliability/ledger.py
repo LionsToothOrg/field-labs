@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 import sqlite3
 from threading import Lock
+import time
 from typing import Callable
 
 
@@ -102,8 +103,14 @@ class OutboxLedger(DurableLedger):
         with self._connect() as connection:
             connection.execute(
                 "CREATE TABLE IF NOT EXISTS outbox ("
-                "request_id TEXT PRIMARY KEY, amount INTEGER NOT NULL, sent INTEGER NOT NULL DEFAULT 0)"
+                "request_id TEXT PRIMARY KEY, amount INTEGER NOT NULL, sent INTEGER NOT NULL DEFAULT 0, "
+                "claimed_by TEXT, lease_until REAL)"
             )
+            columns = {row[1] for row in connection.execute("PRAGMA table_info(outbox)")}
+            if "claimed_by" not in columns:
+                connection.execute("ALTER TABLE outbox ADD COLUMN claimed_by TEXT")
+            if "lease_until" not in columns:
+                connection.execute("ALTER TABLE outbox ADD COLUMN lease_until REAL")
 
     def apply(self, request_id: str, amount: int) -> ApplyResult:
         connection = self._connect()
@@ -133,17 +140,73 @@ class OutboxLedger(DurableLedger):
             ).fetchall()
         return [OutboxMessage(str(request_id), int(amount)) for request_id, amount in rows]
 
-    def dispatch(self, deliver: Callable[[OutboxMessage], None]) -> int:
-        """Deliver pending intents and mark each successful delivery as sent.
+    def claim(self, worker_id: str, lease_seconds: float = 30.0, now: float | None = None) -> OutboxMessage | None:
+        """Atomically lease one deliverable message to a worker."""
+        if lease_seconds <= 0:
+            raise ValueError("lease_seconds must be positive")
+        current_time = time.time() if now is None else now
+        connection = self._connect()
+        try:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                "SELECT request_id, amount FROM outbox "
+                "WHERE sent = 0 AND (claimed_by IS NULL OR lease_until <= ?) "
+                "ORDER BY request_id LIMIT 1",
+                (current_time,),
+            ).fetchone()
+            if row is None:
+                connection.commit()
+                return None
+            request_id, amount = row
+            connection.execute(
+                "UPDATE outbox SET claimed_by = ?, lease_until = ? WHERE request_id = ?",
+                (worker_id, current_time + lease_seconds, request_id),
+            )
+            connection.commit()
+            return OutboxMessage(str(request_id), int(amount))
+        except BaseException:
+            connection.rollback()
+            raise
+        finally:
+            connection.close()
 
-        Delivery and acknowledgement are intentionally separate operations. A
-        crash between them can redeliver a message, exposing the at-least-once
-        boundary instead of claiming exactly-once remote side effects.
+    def acknowledge(self, worker_id: str, request_id: str) -> bool:
+        """Mark a message sent only when the caller still owns its lease."""
+        with self._connect() as connection:
+            cursor = connection.execute(
+                "UPDATE outbox SET sent = 1, claimed_by = NULL, lease_until = NULL "
+                "WHERE request_id = ? AND sent = 0 AND claimed_by = ?",
+                (request_id, worker_id),
+            )
+        return cursor.rowcount == 1
+
+    def release(self, worker_id: str, request_id: str) -> bool:
+        """Release a failed delivery for immediate retry by any worker."""
+        with self._connect() as connection:
+            cursor = connection.execute(
+                "UPDATE outbox SET claimed_by = NULL, lease_until = NULL "
+                "WHERE request_id = ? AND sent = 0 AND claimed_by = ?",
+                (request_id, worker_id),
+            )
+        return cursor.rowcount == 1
+
+    def dispatch(self, deliver: Callable[[OutboxMessage], None], worker_id: str = "worker-1", lease_seconds: float = 30.0) -> int:
+        """Claim, deliver, and acknowledge intents until no work is available.
+
+        Delivery and acknowledgement remain separate operations. A crash after
+        delivery but before acknowledgement can still cause redelivery after
+        lease expiry, preserving the explicit at-least-once boundary.
         """
         delivered = 0
-        for message in self.pending():
-            deliver(message)
-            with self._connect() as connection:
-                connection.execute("UPDATE outbox SET sent = 1 WHERE request_id = ?", (message.request_id,))
+        while True:
+            message = self.claim(worker_id, lease_seconds)
+            if message is None:
+                return delivered
+            try:
+                deliver(message)
+            except BaseException:
+                self.release(worker_id, message.request_id)
+                raise
+            if not self.acknowledge(worker_id, message.request_id):
+                raise RuntimeError("outbox lease ownership changed before acknowledgement")
             delivered += 1
-        return delivered
