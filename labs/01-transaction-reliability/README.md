@@ -14,9 +14,9 @@ The intentionally unsafe implementation checks whether the request was seen, pau
 
 `DurableLedger` advances the invariant into SQLite. A unique request key and balance mutation commit in the same transaction, so restart does not erase duplicate detection and concurrent writers cannot both commit the same logical request.
 
-`OutboxLedger` adds one more boundary. The local state change and a synthetic side-effect intent are committed in the same transaction. Dispatch workers atomically claim pending intents with time-bounded leases before delivery. Successful delivery is acknowledged by the worker that owns the claim; failed delivery releases the claim for retry. An abandoned claim becomes available after its lease expires.
+`OutboxLedger` adds one more boundary. The local state change and a synthetic side-effect intent are committed in the same transaction. Dispatch workers atomically claim pending intents with time-bounded leases before delivery. Successful delivery is acknowledged by the worker that owns the claim; failed delivery records retry state before releasing the claim. An abandoned claim becomes available after its lease expires.
 
-`RetryPolicyStore` isolates the next reliability question: what should happen when delivery keeps failing? It persists attempt counts, schedules deterministic exponential backoff, and quarantines a synthetic message when its configured attempt limit is reached. Deferred or quarantined work is not eligible for delivery, so a repeatedly failing message does not have to monopolize healthy work.
+`RetryPolicyStore` persists attempt counts, schedules deterministic exponential backoff, and quarantines a synthetic message when its configured attempt limit is reached. The outbox claim path enforces that state, so deferred or quarantined work is not eligible for delivery.
 
 ## Run the validation
 
@@ -26,11 +26,11 @@ From the repository root:
 python -m unittest discover -s labs/01-transaction-reliability/tests -v
 ```
 
-The suite covers the unsafe race, process-local idempotency, durable restart/concurrency/failure behavior, the transactional outbox boundary, concurrent outbox worker leases, and retry policy behavior. Outbox and retry cases verify that:
+The suite covers the unsafe race, process-local idempotency, durable restart/concurrency/failure behavior, the transactional outbox boundary, concurrent outbox worker leases, and retry lifecycle behavior. Outbox and retry cases verify that:
 
 - committed state and its side-effect intent both survive restart;
 - a successful synthetic delivery is acknowledged and removed from the pending set;
-- a failed synthetic delivery remains recoverable and can be retried;
+- a failed synthetic delivery records backoff before its lease is released;
 - a duplicate request creates only one local mutation and one outbox intent;
 - competing workers do not concurrently own the same unexpired message lease;
 - an abandoned message can be reclaimed after lease expiry;
@@ -38,7 +38,7 @@ The suite covers the unsafe race, process-local idempotency, durable restart/con
 - retry delays grow deterministically with each failed attempt;
 - retry state survives restart;
 - a message is quarantined when its configured attempt limit is reached;
-- deferred poison work does not make unrelated healthy work ineligible.
+- deferred or quarantined work is skipped by subsequent claims.
 
 ## What this establishes
 
@@ -48,7 +48,7 @@ The durable model also shows why recording a request key separately from the mut
 
 The outbox model extends that reasoning to side effects. Local state and an intent can be atomic even when the eventual delivery cannot be. Worker leases add bounded ownership so concurrent dispatchers can coordinate without holding a database transaction open across delivery, while expired leases make abandoned work recoverable.
 
-The retry slice separates transient failure from permanently unhealthy work. Backoff prevents immediate hot-loop retries, while quarantine gives repeatedly failing messages an explicit terminal state for operator review instead of allowing them to consume every dispatch opportunity.
+The retry lifecycle connects delivery failure to scheduling: a failed attempt persists its retry decision before releasing ownership, and future claims enforce backoff or quarantine. That prevents an immediate hot loop while keeping the policy state durable across worker restarts.
 
 ## Important delivery boundary
 
@@ -64,4 +64,4 @@ The retry model deliberately uses deterministic exponential backoff so exact tim
 
 This is still a local SQLite model with synchronous synthetic delivery. It does not demonstrate a distributed database, broker visibility timeouts, lease renewal for long-running work, jittered backoff, a real dead-letter queue, replay tooling, ordering, request-key expiration, response replay, or exactly-once remote side effects.
 
-A useful next slice is to integrate retry eligibility directly into outbox claiming and add an explicit quarantine/replay workflow, while preserving the worker-lease guarantees already demonstrated here.
+A useful next slice is an explicit, auditable quarantine inspection and replay workflow that can return selected synthetic messages to eligibility without weakening the retry-attempt history or worker-lease guarantees.
