@@ -53,20 +53,16 @@ class TransactionReliabilityTests(unittest.TestCase):
 
     def test_distinct_requests_apply_independently(self) -> None:
         subject = ledger.IdempotentLedger(10)
-
         first = subject.apply("req-demo-001", 25)
         second = subject.apply("req-demo-002", -5)
-
         self.assertTrue(first.applied)
         self.assertTrue(second.applied)
         self.assertEqual(30, subject.balance)
 
     def test_later_retry_is_ignored(self) -> None:
         subject = ledger.IdempotentLedger()
-
         first = subject.apply("req-demo-001", 25)
         retry = subject.apply("req-demo-001", 25)
-
         self.assertTrue(first.applied)
         self.assertFalse(retry.applied)
         self.assertEqual(25, subject.balance)
@@ -78,10 +74,8 @@ class DurableTransactionReliabilityTests(unittest.TestCase):
             database = Path(directory) / "ledger.db"
             first_process = ledger.DurableLedger(database)
             applied = first_process.apply("req-demo-001", 25)
-
             restarted_process = ledger.DurableLedger(database)
             retry = restarted_process.apply("req-demo-001", 25)
-
             self.assertTrue(applied.applied)
             self.assertFalse(retry.applied)
             self.assertEqual(25, restarted_process.balance())
@@ -102,7 +96,6 @@ class DurableTransactionReliabilityTests(unittest.TestCase):
             start.wait()
             for worker in workers:
                 worker.join(timeout=5)
-
             self.assertTrue(all(not worker.is_alive() for worker in workers))
             self.assertEqual(25, subject.balance())
             self.assertEqual(1, sum(result.applied for result in results))
@@ -116,11 +109,61 @@ class DurableTransactionReliabilityTests(unittest.TestCase):
 
             with self.assertRaisesRegex(RuntimeError, "synthetic failure"):
                 subject.apply("req-demo-001", 25, fail_before_mutation)
-
             retry = subject.apply("req-demo-001", 25)
-
             self.assertTrue(retry.applied)
             self.assertEqual(25, subject.balance())
+
+
+class TransactionalOutboxTests(unittest.TestCase):
+    def test_state_change_and_outbox_intent_survive_restart(self) -> None:
+        with TemporaryDirectory() as directory:
+            database = Path(directory) / "ledger.db"
+            subject = ledger.OutboxLedger(database)
+            result = subject.apply("req-demo-001", 25)
+
+            restarted = ledger.OutboxLedger(database)
+            self.assertTrue(result.applied)
+            self.assertEqual(25, restarted.balance())
+            self.assertEqual([ledger.OutboxMessage("req-demo-001", 25)], restarted.pending())
+
+    def test_successful_dispatch_acknowledges_message(self) -> None:
+        with TemporaryDirectory() as directory:
+            subject = ledger.OutboxLedger(Path(directory) / "ledger.db")
+            subject.apply("req-demo-001", 25)
+            delivered = []
+
+            count = subject.dispatch(delivered.append)
+
+            self.assertEqual(1, count)
+            self.assertEqual([ledger.OutboxMessage("req-demo-001", 25)], delivered)
+            self.assertEqual([], subject.pending())
+
+    def test_failed_delivery_leaves_message_for_retry(self) -> None:
+        with TemporaryDirectory() as directory:
+            subject = ledger.OutboxLedger(Path(directory) / "ledger.db")
+            subject.apply("req-demo-001", 25)
+
+            def fail_delivery(_message) -> None:
+                raise RuntimeError("synthetic downstream failure")
+
+            with self.assertRaisesRegex(RuntimeError, "synthetic downstream"):
+                subject.dispatch(fail_delivery)
+
+            delivered = []
+            count = subject.dispatch(delivered.append)
+            self.assertEqual(1, count)
+            self.assertEqual([ledger.OutboxMessage("req-demo-001", 25)], delivered)
+            self.assertEqual([], subject.pending())
+
+    def test_duplicate_request_creates_one_outbox_intent(self) -> None:
+        with TemporaryDirectory() as directory:
+            subject = ledger.OutboxLedger(Path(directory) / "ledger.db")
+            first = subject.apply("req-demo-001", 25)
+            retry = subject.apply("req-demo-001", 25)
+            self.assertTrue(first.applied)
+            self.assertFalse(retry.applied)
+            self.assertEqual(25, subject.balance())
+            self.assertEqual([ledger.OutboxMessage("req-demo-001", 25)], subject.pending())
 
 
 if __name__ == "__main__":
