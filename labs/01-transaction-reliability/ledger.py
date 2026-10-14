@@ -111,6 +111,11 @@ class OutboxLedger(DurableLedger):
                 connection.execute("ALTER TABLE outbox ADD COLUMN claimed_by TEXT")
             if "lease_until" not in columns:
                 connection.execute("ALTER TABLE outbox ADD COLUMN lease_until REAL")
+            connection.execute(
+                "CREATE TABLE IF NOT EXISTS outbox_retry ("
+                "request_id TEXT PRIMARY KEY, attempt_count INTEGER NOT NULL DEFAULT 0, "
+                "next_attempt_at REAL, quarantined INTEGER NOT NULL DEFAULT 0)"
+            )
 
     def apply(self, request_id: str, amount: int) -> ApplyResult:
         connection = self._connect()
@@ -141,7 +146,7 @@ class OutboxLedger(DurableLedger):
         return [OutboxMessage(str(request_id), int(amount)) for request_id, amount in rows]
 
     def claim(self, worker_id: str, lease_seconds: float = 30.0, now: float | None = None) -> OutboxMessage | None:
-        """Atomically lease one deliverable message to a worker."""
+        """Atomically lease one currently eligible message to a worker."""
         if lease_seconds <= 0:
             raise ValueError("lease_seconds must be positive")
         current_time = time.time() if now is None else now
@@ -149,10 +154,14 @@ class OutboxLedger(DurableLedger):
         try:
             connection.execute("BEGIN IMMEDIATE")
             row = connection.execute(
-                "SELECT request_id, amount FROM outbox "
-                "WHERE sent = 0 AND (claimed_by IS NULL OR lease_until <= ?) "
-                "ORDER BY request_id LIMIT 1",
-                (current_time,),
+                "SELECT o.request_id, o.amount FROM outbox AS o "
+                "LEFT JOIN outbox_retry AS r ON r.request_id = o.request_id "
+                "WHERE o.sent = 0 "
+                "AND (o.claimed_by IS NULL OR o.lease_until <= ?) "
+                "AND COALESCE(r.quarantined, 0) = 0 "
+                "AND (r.next_attempt_at IS NULL OR r.next_attempt_at <= ?) "
+                "ORDER BY o.request_id LIMIT 1",
+                (current_time, current_time),
             ).fetchone()
             if row is None:
                 connection.commit()
