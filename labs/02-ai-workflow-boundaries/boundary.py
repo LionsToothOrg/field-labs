@@ -18,9 +18,33 @@ class Recommendation:
 
 
 @dataclass(frozen=True)
+class CandidateConstraints:
+    allowed_item_ids: frozenset[str] | None = None
+    required_attributes: Mapping[str, str] | None = None
+
+
+@dataclass(frozen=True)
 class ValidationResult:
     accepted: tuple[Recommendation, ...]
     rejected: tuple[tuple[Recommendation, tuple[str, ...]], ...]
+
+
+def filter_candidates(
+    catalog: Mapping[str, CatalogItem],
+    constraints: CandidateConstraints,
+) -> tuple[CatalogItem, ...]:
+    """Apply hard catalog constraints before flexible ranking or explanation."""
+    required_attributes = constraints.required_attributes or {}
+    candidates: list[CatalogItem] = []
+
+    for item_id, item in catalog.items():
+        if constraints.allowed_item_ids is not None and item_id not in constraints.allowed_item_ids:
+            continue
+        if any(item.attributes.get(key) != value for key, value in required_attributes.items()):
+            continue
+        candidates.append(item)
+
+    return tuple(candidates)
 
 
 def validate_recommendations(
