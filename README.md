@@ -1,27 +1,14 @@
 <div align="center">
 
-# FIELD LABS
+<img src="assets/field-labs-hero.svg" alt="Field Labs — Off the Map. Engineering under controlled conditions." width="100%">
 
-### `OFF THE MAP // ENGINEERING UNDER CONTROLLED CONDITIONS`
+<br>
+
+[![Field Labs Validation](https://github.com/LionsToothOrg/field-labs/actions/workflows/validate.yml/badge.svg)](https://github.com/LionsToothOrg/field-labs/actions/workflows/validate.yml)
 
 **Real engineering problems. Rebuilt from scratch. Broken on purpose. Measured honestly.**
 
 [ENTER THE LAB BENCH](#-the-lab-bench) · [READ THE METHOD](#-the-method) · [OPEN ACTIVE EXPERIMENT](labs/01-transaction-reliability/)
-
-<br>
-
-```text
-┌──────────────────────────────────────────────────────────────────────┐
-│ FIELD LABS CONTROL                                                  │
-│                                                                      │
-│ SIGNAL        ████████████████████  ACQUIRED                         │
-│ ENVIRONMENT   SYNTHETIC             ISOLATED                         │
-│ EVIDENCE      TESTS + MEASUREMENTS  REQUIRED                         │
-│ ACTIVE LAB    01 // TRANSACTION RELIABILITY                          │
-│                                                                      │
-│ STATUS        ● EXPERIMENT IN PROGRESS                               │
-└──────────────────────────────────────────────────────────────────────┘
-```
 
 </div>
 
@@ -55,22 +42,7 @@ The problem is the inspiration. The implementation and evidence are built here f
 
 ## ⌁ THE METHOD
 
-```text
-      SIGNAL
-        │
-        ▼
-   ┌─────────┐      ┌─────────┐      ┌─────────┐
-   │ REBUILD │ ───► │  BREAK  │ ───► │  TRACE  │
-   └─────────┘      └─────────┘      └────┬────┘
-                                          │
-                                          ▼
-   ┌─────────┐      ┌─────────┐      ┌─────────┐
-   │ PUBLISH │ ◄─── │  PROVE  │ ◄─── │   FIX   │
-   └─────────┘      └─────────┘      └─────────┘
-
-   question → reproduction → failure → root cause
-              evidence ← validation ← smallest defensible change
-```
+<img src="assets/method-flow.svg" alt="The Field Labs method: rebuild, break, trace, fix, prove, document." width="100%">
 
 A useful Field Lab has a narrow question, a reproducible baseline, an intentionally triggered failure when appropriate, an improvement, and evidence showing what changed.
 
@@ -83,13 +55,13 @@ A useful Field Lab has a narrow question, a reproducible baseline, an intentiona
 | ID | Experiment | State | Signal |
 | :-- | :-- | :--: | :-- |
 | **[01](labs/01-transaction-reliability/)** | **Transaction Reliability** | 🟢 `ACTIVE` | Duplicate requests + concurrency + idempotency |
-| **02** | **AI Workflow Boundaries** | ⚪ `QUEUED` | Deterministic software ↔ AI interpretation |
-| **03** | **Email Delivery & Verification** | ⚪ `QUEUED` | Generated ≠ delivered |
-| **04** | **Web Session Reliability** | ⚪ `PLANNED` | Concurrent refresh + authentication state |
-| **05** | **Document Annotation** | ⚪ `PLANNED` | Persistent comments through changing views |
-| **06** | **Verified Document Pipeline** | ⚪ `PLANNED` | Generation + automated verification |
-| **07** | **Offline Event Check-In** | ⚪ `PLANNED` | Offline acceptance + eventual reconciliation |
-| **08** | **AI Product Discovery** | ⚪ `PLANNED` | Semantic retrieval without invented specs |
+| **02** | **AI Workflow Boundaries** | 🟣 `QUEUED` | Deterministic software ↔ AI interpretation |
+| **03** | **Email Delivery & Verification** | 🟠 `QUEUED` | Generated ≠ delivered |
+| **04** | **Web Session Reliability** | 🔵 `PLANNED` | Concurrent refresh + authentication state |
+| **05** | **Document Annotation** | 🟣 `PLANNED` | Persistent comments through changing views |
+| **06** | **Verified Document Pipeline** | 🟡 `PLANNED` | Generation + automated verification |
+| **07** | **Offline Event Check-In** | 🔵 `PLANNED` | Offline acceptance + eventual reconciliation |
+| **08** | **AI Product Discovery** | 🟣 `PLANNED` | Semantic retrieval without invented specs |
 
 <details open>
 <summary><strong>🟢 LAB 01 // TRANSACTION RELIABILITY // ACTIVE</strong></summary>
@@ -97,20 +69,7 @@ A useful Field Lab has a narrow question, a reproducible baseline, an intentiona
 
 ### The duplicate transaction
 
-```text
-                     ┌─────────────────┐
-worker A ───────────►│ duplicate check │────┐
-                     └─────────────────┘    │
-                                            ├──► STATE MUTATION
-                     ┌─────────────────┐    │
-worker B ───────────►│ duplicate check │────┘
-                     └─────────────────┘
-
-request_id: synthetic-award-001
-
-INVARIANT // one logical request must produce at most one state change
-QUESTION  // can both workers get through before either one writes?
-```
+<img src="assets/lab-01-race.svg" alt="Two synthetic workers racing through duplicate checks toward one state mutation." width="100%">
 
 **Current experiment:** reproduce the duplicate-request race deterministically, enforce the idempotency invariant, and prove the changed behavior with automated tests.
 
@@ -121,7 +80,7 @@ QUESTION  // can both workers get through before either one writes?
 </details>
 
 <details>
-<summary><strong>⚪ LAB 02 // AI WORKFLOW BOUNDARIES // QUEUED</strong></summary>
+<summary><strong>🟣 LAB 02 // AI WORKFLOW BOUNDARIES // QUEUED</strong></summary>
 <br>
 
 Where should deterministic software stop and AI interpretation begin? Planned experiments explore structured constraints, retrieval, grounding, conflicting source material, and explicit failure boundaries.
@@ -129,7 +88,7 @@ Where should deterministic software stop and AI interpretation begin? Planned ex
 </details>
 
 <details>
-<summary><strong>⚪ LAB 03 // EMAIL DELIVERY & VERIFICATION // QUEUED</strong></summary>
+<summary><strong>🟠 LAB 03 // EMAIL DELIVERY & VERIFICATION // QUEUED</strong></summary>
 <br>
 
 An application says the verification email was sent. The user never receives it. The experiment follows the message through application state, provider acceptance, authentication, suppression, bounce, deferral, and delivery evidence.

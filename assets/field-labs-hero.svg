@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 430" role="img" aria-labelledby="title desc">
+  <title id="title">Field Labs — Off the Map</title>
+  <desc id="desc">A colorful scientific signal map connecting rebuild, break, trace, fix, prove, and document around the active transaction reliability lab.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#07111f"/><stop offset=".48" stop-color="#10142d"/><stop offset="1" stop-color="#081a25"/></linearGradient>
+    <linearGradient id="signal" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#24d6ff"/><stop offset=".48" stop-color="#8b5cf6"/><stop offset="1" stop-color="#ffb84d"/></linearGradient>
+    <radialGradient id="glow"><stop stop-color="#24d6ff" stop-opacity=".38"/><stop offset="1" stop-color="#24d6ff" stop-opacity="0"/></radialGradient>
+    <filter id="soft"><feGaussianBlur stdDeviation="18"/></filter>
+    <pattern id="grid" width="36" height="36" patternUnits="userSpaceOnUse"><path d="M36 0H0V36" fill="none" stroke="#6ee7ff" stroke-opacity=".07"/></pattern>
+  </defs>
+  <rect width="1200" height="430" rx="28" fill="url(#bg)"/>
+  <rect width="1200" height="430" rx="28" fill="url(#grid)"/>
+  <circle cx="920" cy="205" r="210" fill="url(#glow)" filter="url(#soft)"/>
+  <circle cx="170" cy="40" r="120" fill="#8b5cf6" opacity=".08" filter="url(#soft)"/>
+  <path d="M720 90C805 40 1015 56 1080 168S1000 360 850 320 690 178 720 90Z" fill="none" stroke="#24d6ff" stroke-opacity=".16" stroke-width="2"/>
+  <path d="M760 116C830 76 985 84 1030 170S970 315 865 286 735 188 760 116Z" fill="none" stroke="#8b5cf6" stroke-opacity=".25"/>
+  <g font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">
+    <text x="74" y="72" fill="#7dd3fc" font-size="15" letter-spacing="4">OFF THE MAP / 001</text>
+    <text x="72" y="148" fill="#f8fafc" font-size="58" font-weight="800" letter-spacing="5">FIELD LABS</text>
+    <text x="75" y="184" fill="#cbd5e1" font-size="18">engineering, under controlled conditions.</text>
+    <rect x="74" y="218" width="470" height="4" rx="2" fill="url(#signal)"/>
+    <text x="75" y="260" fill="#94a3b8" font-size="14" letter-spacing="2">SIGNAL</text><text x="170" y="260" fill="#22d3ee" font-size="14">ACQUIRED</text>
+    <text x="75" y="290" fill="#94a3b8" font-size="14" letter-spacing="2">ACTIVE</text><text x="170" y="290" fill="#f8fafc" font-size="14">01 / TRANSACTION RELIABILITY</text>
+    <text x="75" y="320" fill="#94a3b8" font-size="14" letter-spacing="2">EVIDENCE</text><text x="170" y="320" fill="#86efac" font-size="14">TESTED</text>
+    <text x="75" y="370" fill="#64748b" font-size="12" letter-spacing="1.8">BUILD  →  BREAK  →  TRACE  →  FIX  →  PROVE  →  DOCUMENT</text>
+  </g>
+  <g fill="none" stroke-linecap="round">
+    <path d="M760 210C815 145 900 128 962 164S1026 250 972 286 830 300 780 248" stroke="url(#signal)" stroke-width="3"/>
+    <path d="M785 242L840 190 900 224 962 164 1018 224" stroke="#d8b4fe" stroke-opacity=".6" stroke-width="1.5" stroke-dasharray="5 9"/>
+  </g>
+  <g stroke="#08111f" stroke-width="5">
+    <circle cx="760" cy="210" r="11" fill="#22d3ee"/><circle cx="840" cy="190" r="9" fill="#8b5cf6"/><circle cx="900" cy="224" r="13" fill="#fbbf24"/><circle cx="962" cy="164" r="9" fill="#22d3ee"/><circle cx="1018" cy="224" r="11" fill="#86efac"/><circle cx="972" cy="286" r="8" fill="#fb7185"/><circle cx="780" cy="248" r="7" fill="#a78bfa"/>
+  </g>
+  <g font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#cbd5e1" letter-spacing="1"><text x="725" y="190">REBUILD</text><text x="815" y="170">BREAK</text><text x="880" y="255">TRACE</text><text x="946" y="142">FIX</text><text x="1005" y="255">PROVE</text><text x="945" y="316">DOC</text></g>
+  <circle cx="900" cy="224" r="29" fill="none" stroke="#fbbf24" stroke-opacity=".28"/><circle cx="900" cy="224" r="48" fill="none" stroke="#fbbf24" stroke-opacity=".12"/>
+</svg>
