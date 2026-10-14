@@ -7,6 +7,8 @@ from threading import Lock
 import time
 from typing import Callable
 
+from retry_policy import RetryPolicyStore
+
 
 @dataclass(frozen=True)
 class ApplyResult:
@@ -190,7 +192,7 @@ class OutboxLedger(DurableLedger):
         return cursor.rowcount == 1
 
     def release(self, worker_id: str, request_id: str) -> bool:
-        """Release a failed delivery for immediate retry by any worker."""
+        """Release a failed delivery for retry when its policy allows."""
         with self._connect() as connection:
             cursor = connection.execute(
                 "UPDATE outbox SET claimed_by = NULL, lease_until = NULL "
@@ -199,13 +201,24 @@ class OutboxLedger(DurableLedger):
             )
         return cursor.rowcount == 1
 
-    def dispatch(self, deliver: Callable[[OutboxMessage], None], worker_id: str = "worker-1", lease_seconds: float = 30.0) -> int:
-        """Claim, deliver, and acknowledge intents until no work is available.
+    def dispatch(
+        self,
+        deliver: Callable[[OutboxMessage], None],
+        worker_id: str = "worker-1",
+        lease_seconds: float = 30.0,
+        *,
+        max_attempts: int = 3,
+        base_backoff_seconds: float = 1.0,
+    ) -> int:
+        """Claim, deliver, and acknowledge currently eligible intents.
 
-        Delivery and acknowledgement remain separate operations. A crash after
-        delivery but before acknowledgement can still cause redelivery after
-        lease expiry, preserving the explicit at-least-once boundary.
+        Failed deliveries persist retry state before releasing their lease. The
+        claim query then enforces backoff or quarantine on the next dispatch.
+        Delivery and acknowledgement remain separate operations, so a crash
+        after delivery but before acknowledgement can still cause redelivery
+        after lease expiry. The experiment therefore remains at-least-once.
         """
+        retry_policy = RetryPolicyStore(self.database)
         delivered = 0
         while True:
             message = self.claim(worker_id, lease_seconds)
@@ -214,7 +227,13 @@ class OutboxLedger(DurableLedger):
             try:
                 deliver(message)
             except BaseException:
-                self.release(worker_id, message.request_id)
+                retry_policy.record_failure(
+                    message.request_id,
+                    max_attempts=max_attempts,
+                    base_backoff_seconds=base_backoff_seconds,
+                )
+                if not self.release(worker_id, message.request_id):
+                    raise RuntimeError("outbox lease ownership changed before failed delivery was released")
                 raise
             if not self.acknowledge(worker_id, message.request_id):
                 raise RuntimeError("outbox lease ownership changed before acknowledgement")
