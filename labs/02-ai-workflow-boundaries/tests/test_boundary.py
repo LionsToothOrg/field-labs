@@ -25,6 +25,11 @@ class RecommendationBoundaryTests(unittest.TestCase):
                 name="Demo Desk",
                 attributes={"width": "120cm", "material": "bamboo"},
             ),
+            "demo-stool": boundary.CatalogItem(
+                item_id="demo-stool",
+                name="Demo Stool",
+                attributes={"material": "bamboo", "finish": "matte"},
+            ),
         }
 
     def test_accepts_claims_grounded_in_authoritative_catalog(self):
@@ -65,6 +70,39 @@ class RecommendationBoundaryTests(unittest.TestCase):
 
         self.assertEqual(result.accepted, (valid,))
         self.assertEqual(result.rejected[0][0], invalid)
+
+    def test_filters_candidates_to_explicit_allowlist(self):
+        constraints = boundary.CandidateConstraints(
+            allowed_item_ids=frozenset({"demo-lamp", "demo-stool"})
+        )
+
+        result = boundary.filter_candidates(self.catalog, constraints)
+
+        self.assertEqual(tuple(item.item_id for item in result), ("demo-lamp", "demo-stool"))
+
+    def test_filters_candidates_by_authoritative_attributes(self):
+        constraints = boundary.CandidateConstraints(required_attributes={"material": "bamboo"})
+
+        result = boundary.filter_candidates(self.catalog, constraints)
+
+        self.assertEqual(tuple(item.item_id for item in result), ("demo-desk", "demo-stool"))
+
+    def test_combines_allowlist_and_attribute_constraints(self):
+        constraints = boundary.CandidateConstraints(
+            allowed_item_ids=frozenset({"demo-lamp", "demo-stool"}),
+            required_attributes={"material": "bamboo"},
+        )
+
+        result = boundary.filter_candidates(self.catalog, constraints)
+
+        self.assertEqual(tuple(item.item_id for item in result), ("demo-stool",))
+
+    def test_unknown_required_attribute_produces_no_candidates(self):
+        constraints = boundary.CandidateConstraints(required_attributes={"invented": "value"})
+
+        result = boundary.filter_candidates(self.catalog, constraints)
+
+        self.assertEqual(result, ())
 
 
 if __name__ == "__main__":
