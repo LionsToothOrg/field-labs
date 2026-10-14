@@ -1,0 +1,97 @@
+# Environment variables and local secrets
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+*.jks
+*.keystore
+*.mobileprovision
+
+# Secret/config overrides
+secrets.*
+!secrets.example.*
+credentials.*
+!credentials.example.*
+*.tfvars
+*.tfvars.json
+!*.example.tfvars
+!*.example.tfvars.json
+terraform.tfstate
+terraform.tfstate.*
+.terraform/
+.terraform.lock.hcl
+
+# AWS / cloud local credentials
+.aws/
+.gcloud/
+.azure/
+
+# Dependencies
+node_modules/
+.pnpm-store/
+.yarn/
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Build output
+.next/
+dist/
+build/
+out/
+coverage/
+*.tsbuildinfo
+
+# Logs, dumps, traces, and local runtime artifacts
+*.log
+logs/
+*.dump
+*.sql
+*.sqlite
+*.sqlite3
+*.db
+*.har
+*.trace
+*.pcap
+*.pcapng
+*.pid
+
+# IDE / OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.example.json
+*.swp
+*.swo
+
+# Local tooling / temporary files
+.tmp/
+tmp/
+temp/
+.cache/
+*.bak
+*.orig
+
+# Test and tool caches
+.nyc_output/
+playwright-report/
+test-results/
+
+# Local Docker overrides
+docker-compose.override.yml
+compose.override.yml
