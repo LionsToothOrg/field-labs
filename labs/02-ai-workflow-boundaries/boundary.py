@@ -24,6 +24,17 @@ class CandidateConstraints:
 
 
 @dataclass(frozen=True)
+class EligibleCandidates:
+    """Candidate set that has passed deterministic eligibility checks."""
+
+    items: tuple[CatalogItem, ...]
+
+    @property
+    def item_ids(self) -> frozenset[str]:
+        return frozenset(item.item_id for item in self.items)
+
+
+@dataclass(frozen=True)
 class ValidationResult:
     accepted: tuple[Recommendation, ...]
     rejected: tuple[tuple[Recommendation, tuple[str, ...]], ...]
@@ -32,7 +43,7 @@ class ValidationResult:
 def filter_candidates(
     catalog: Mapping[str, CatalogItem],
     constraints: CandidateConstraints,
-) -> tuple[CatalogItem, ...]:
+) -> EligibleCandidates:
     """Apply hard catalog constraints before flexible ranking or explanation."""
     required_attributes = constraints.required_attributes or {}
     candidates: list[CatalogItem] = []
@@ -44,7 +55,16 @@ def filter_candidates(
             continue
         candidates.append(item)
 
-    return tuple(candidates)
+    return EligibleCandidates(tuple(candidates))
+
+
+def validate_ranked_recommendations(
+    eligible: EligibleCandidates,
+    recommendations: Sequence[Recommendation],
+) -> ValidationResult:
+    """Validate ranking output against only the deterministically eligible catalog slice."""
+    catalog = {item.item_id: item for item in eligible.items}
+    return validate_recommendations(catalog, recommendations)
 
 
 def validate_recommendations(
