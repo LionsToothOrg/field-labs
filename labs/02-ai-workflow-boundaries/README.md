@@ -14,6 +14,8 @@ A fictional catalog contains a small set of fabricated items and authoritative a
 
 `decide_failure` takes an already classified failure and a bounded attempt count. Malformed output and transient provider failures are recoverable only while retry budget remains. Policy violations and invalid workflow state fail immediately. Every decision returns a typed action and reason so the policy can be logged or measured by a caller without parsing exception text.
 
+`run_workflow` now composes those boundaries into one small execution path. It filters the authoritative catalog first, accepts a synthetic ranking result only as flexible input, validates that result against the eligible handoff, and exposes the deterministic failure decision when the flexible step is represented as failed. A failed flexible step never contributes accepted recommendations.
+
 That separation is intentional:
 
 - **Deterministic work before AI-shaped work:** enforce hard eligibility constraints against authoritative data.
@@ -30,7 +32,7 @@ From the repository root:
 python -m unittest discover -s labs/02-ai-workflow-boundaries/tests -v
 ```
 
-The suite checks grounded claims, unknown items, invented attributes, conflicting values, mixed valid/invalid candidates, deterministic filtering, the eligible-candidate handoff, rejection of a filtered-out item after ranking, authoritative-attribute validation after the handoff, recoverable failure retries, retry-budget exhaustion, hard workflow failures, and invalid retry counters.
+The suite checks grounded claims, unknown items, invented attributes, conflicting values, mixed valid/invalid candidates, deterministic filtering, the eligible-candidate handoff, rejection of a filtered-out item after ranking, authoritative-attribute validation after the handoff, recoverable failure retries, retry-budget exhaustion, hard workflow failures, invalid retry counters, and the composed workflow across success, rejected claims, recoverable failures, and non-recoverable failures.
 
 ## What these slices establish
 
@@ -40,10 +42,12 @@ Likewise, hard requirements should not depend on a probabilistic component choos
 
 Failure handling benefits from the same boundary. Whether a known failure class is retryable is application policy, not a decision to delegate to generated output. A small typed decision object makes the chosen action and rationale observable while keeping retry limits deterministic.
 
+The composed workflow makes the sequence itself testable: eligibility happens before flexible output is considered, flexible output cannot expand the eligible set, factual claims are checked before acceptance, and a classified failure produces policy output rather than partially accepting ranking data.
+
 ## Limitations and next experiment
 
 This is a deterministic boundary test, not an evaluation of an AI provider, retrieval system, embedding model, or prompt. It does not measure recommendation relevance, semantic recall, latency, cost, or model accuracy. Constraints are exact string matches over a tiny in-memory catalog; there is no schema normalization, numeric/range comparison, persistence layer, or runtime sandbox around an external model.
 
-The failure policy also assumes classification has already happened. It does not parse provider exceptions, perform backoff or jitter, persist attempts, execute retries, or define provider-specific semantics. Those behaviors should remain separate from this policy until there is evidence that coupling them improves the experiment.
+The workflow receives a precomputed synthetic ranking result rather than invoking a model, and failure classification is still supplied by the caller. It does not parse provider exceptions, perform backoff or jitter, persist attempts, execute retries, or define provider-specific semantics. Those behaviors should remain separate until there is evidence that adding them improves the experiment rather than obscuring the boundary being studied.
 
-A useful next slice is to exercise the boundary as a small end-to-end workflow: deterministic filtering, a synthetic ranking result, factual validation, and failure-policy output, while preserving the current no-provider and synthetic-only scope.
+A useful next slice is to make the workflow trace observable as structured stage events so tests can verify not only the final result but which deterministic boundary accepted or rejected each transition, without adding a real provider.
