@@ -70,9 +70,21 @@ class ReconciliationDecision:
 
 
 @dataclass(frozen=True)
+class ReconciliationState:
+    current_state: DeliveryState
+    seen_event_ids: frozenset[str]
+    latest_sequence: int
+
+    @classmethod
+    def from_trace(cls, trace: DeliveryTrace) -> "ReconciliationState":
+        return cls(trace.current_state, frozenset(), -1)
+
+
+@dataclass(frozen=True)
 class ReconciliationResult:
     trace: DeliveryTrace
     decisions: tuple[ReconciliationDecision, ...]
+    state: ReconciliationState
 
     @property
     def applied_event_ids(self) -> tuple[str, ...]:
@@ -91,20 +103,36 @@ class ReconciliationResult:
         )
 
 
-def reconcile_provider_events(
-    trace: DeliveryTrace, events: tuple[ProviderEvent, ...]
-) -> ReconciliationResult:
-    """Apply provider evidence and record content-minimizing reconciliation decisions.
+def restore_trace(state: ReconciliationState) -> DeliveryTrace:
+    """Restore only the delivery state needed to continue reconciliation.
 
-    Duplicate event IDs are ignored after their first occurrence. Events at or below the
-    latest applied sequence are stale. Contradictory transitions are ignored rather than
-    rewriting stronger evidence already present in the trace. Decisions intentionally omit
-    provider event detail so an audit trail does not require payload-content logging.
+    Historical provider detail is intentionally not part of durable reconciliation state.
+    """
+    return DeliveryTrace(
+        (DeliveryEvent(state.current_state, "restored synthetic reconciliation state"),)
+    )
+
+
+def reconcile_provider_events(
+    trace: DeliveryTrace,
+    events: tuple[ProviderEvent, ...],
+    state: ReconciliationState | None = None,
+) -> ReconciliationResult:
+    """Apply provider evidence and return content-minimizing durable state.
+
+    Duplicate event IDs are ignored after their first occurrence, including across calls when
+    the returned state is supplied again. Events at or below the latest applied sequence are
+    stale. Contradictory transitions are ignored rather than rewriting stronger evidence.
+    Durable state intentionally omits provider event detail and message content.
     """
     current = trace
-    seen_ids: set[str] = set()
+    reconciliation_state = state or ReconciliationState.from_trace(trace)
+    if reconciliation_state.current_state is not trace.current_state:
+        raise ValueError("trace and reconciliation state disagree")
+
+    seen_ids = set(reconciliation_state.seen_event_ids)
     decisions: list[ReconciliationDecision] = []
-    latest_sequence = -1
+    latest_sequence = reconciliation_state.latest_sequence
 
     for event in events:
         if event.event_id in seen_ids:
@@ -142,7 +170,10 @@ def reconcile_provider_events(
         )
         latest_sequence = event.sequence
 
-    return ReconciliationResult(current, tuple(decisions))
+    durable_state = ReconciliationState(
+        current.current_state, frozenset(seen_ids), latest_sequence
+    )
+    return ReconciliationResult(current, tuple(decisions), durable_state)
 
 
 def generated(message_id: str = "msg-synthetic-001") -> DeliveryTrace:
