@@ -114,5 +114,46 @@ class RecommendationBoundaryTests(unittest.TestCase):
         self.assertEqual(result.rejected[0][1], ("attribute mismatch: finish",))
 
 
+class FailurePolicyTests(unittest.TestCase):
+    def test_retries_malformed_output_with_budget_remaining(self):
+        decision = boundary.decide_failure(
+            boundary.FailureKind.MALFORMED_OUTPUT, attempt=1, max_attempts=2
+        )
+        self.assertEqual(decision.action, boundary.FailureAction.RETRY)
+        self.assertEqual(decision.reason, "recoverable failure within retry budget")
+
+    def test_fails_malformed_output_when_budget_is_exhausted(self):
+        decision = boundary.decide_failure(
+            boundary.FailureKind.MALFORMED_OUTPUT, attempt=2, max_attempts=2
+        )
+        self.assertEqual(decision.action, boundary.FailureAction.FAIL)
+        self.assertEqual(decision.reason, "recoverable failure exhausted retry budget")
+
+    def test_retries_transient_provider_failure_with_budget_remaining(self):
+        decision = boundary.decide_failure(
+            boundary.FailureKind.TRANSIENT_PROVIDER, attempt=1, max_attempts=3
+        )
+        self.assertEqual(decision.action, boundary.FailureAction.RETRY)
+
+    def test_policy_violation_fails_without_retry(self):
+        decision = boundary.decide_failure(
+            boundary.FailureKind.POLICY_VIOLATION, attempt=1, max_attempts=3
+        )
+        self.assertEqual(decision.action, boundary.FailureAction.FAIL)
+        self.assertEqual(decision.reason, "non-recoverable workflow failure")
+
+    def test_invalid_workflow_state_fails_without_retry(self):
+        decision = boundary.decide_failure(
+            boundary.FailureKind.INVALID_WORKFLOW_STATE, attempt=1, max_attempts=3
+        )
+        self.assertEqual(decision.action, boundary.FailureAction.FAIL)
+
+    def test_rejects_invalid_retry_budget(self):
+        with self.assertRaises(ValueError):
+            boundary.decide_failure(
+                boundary.FailureKind.MALFORMED_OUTPUT, attempt=0, max_attempts=2
+            )
+
+
 if __name__ == "__main__":
     unittest.main()

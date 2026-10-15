@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import Enum
 from typing import Mapping, Sequence
 
 
@@ -38,6 +39,38 @@ class EligibleCandidates:
 class ValidationResult:
     accepted: tuple[Recommendation, ...]
     rejected: tuple[tuple[Recommendation, tuple[str, ...]], ...]
+
+
+class FailureKind(str, Enum):
+    MALFORMED_OUTPUT = "malformed_output"
+    TRANSIENT_PROVIDER = "transient_provider"
+    POLICY_VIOLATION = "policy_violation"
+    INVALID_WORKFLOW_STATE = "invalid_workflow_state"
+
+
+class FailureAction(str, Enum):
+    RETRY = "retry"
+    FAIL = "fail"
+
+
+@dataclass(frozen=True)
+class FailureDecision:
+    kind: FailureKind
+    action: FailureAction
+    reason: str
+
+
+def decide_failure(kind: FailureKind, *, attempt: int, max_attempts: int) -> FailureDecision:
+    """Map a classified workflow failure to a deterministic, observable action."""
+    if attempt < 1 or max_attempts < 1:
+        raise ValueError("attempt and max_attempts must be positive")
+
+    recoverable = kind in {FailureKind.MALFORMED_OUTPUT, FailureKind.TRANSIENT_PROVIDER}
+    if recoverable and attempt < max_attempts:
+        return FailureDecision(kind, FailureAction.RETRY, "recoverable failure within retry budget")
+    if recoverable:
+        return FailureDecision(kind, FailureAction.FAIL, "recoverable failure exhausted retry budget")
+    return FailureDecision(kind, FailureAction.FAIL, "non-recoverable workflow failure")
 
 
 def filter_candidates(
