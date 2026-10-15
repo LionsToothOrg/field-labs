@@ -4,6 +4,7 @@ from delivery import (
     DeliveryEvent,
     DeliveryState,
     ProviderEvent,
+    ReconciliationOutcome,
     generated,
     reconcile_provider_events,
 )
@@ -65,6 +66,10 @@ class ProviderEventReconciliationTests(unittest.TestCase):
         self.assertEqual(result.trace.current_state, DeliveryState.ACCEPTED)
         self.assertEqual(result.applied_event_ids, ("evt-synthetic-001",))
         self.assertEqual(result.ignored_event_ids, ("evt-synthetic-001",))
+        self.assertEqual(
+            tuple(decision.outcome for decision in result.decisions),
+            (ReconciliationOutcome.APPLIED, ReconciliationOutcome.DUPLICATE),
+        )
 
     def test_stale_event_cannot_rewrite_newer_evidence(self):
         events = (
@@ -85,6 +90,7 @@ class ProviderEventReconciliationTests(unittest.TestCase):
             result.applied_event_ids, ("evt-synthetic-010", "evt-synthetic-012")
         )
         self.assertEqual(result.ignored_event_ids, ("evt-synthetic-011",))
+        self.assertEqual(result.decisions[-1].outcome, ReconciliationOutcome.STALE)
 
     def test_contradictory_event_cannot_reverse_terminal_delivery(self):
         events = (
@@ -102,6 +108,24 @@ class ProviderEventReconciliationTests(unittest.TestCase):
 
         self.assertEqual(result.trace.current_state, DeliveryState.DELIVERED)
         self.assertEqual(result.ignored_event_ids, ("evt-synthetic-022",))
+        self.assertEqual(
+            result.decisions[-1].outcome, ReconciliationOutcome.CONTRADICTORY
+        )
+
+    def test_decisions_do_not_copy_provider_detail(self):
+        sensitive_like_but_synthetic_detail = "synthetic payload body that should not be audited"
+        event = ProviderEvent(
+            "evt-synthetic-030",
+            30,
+            DeliveryState.ACCEPTED,
+            sensitive_like_but_synthetic_detail,
+        )
+
+        result = reconcile_provider_events(generated(), (event,))
+
+        self.assertEqual(result.decisions[0].outcome, ReconciliationOutcome.APPLIED)
+        self.assertFalse(hasattr(result.decisions[0], "detail"))
+        self.assertNotIn(sensitive_like_but_synthetic_detail, repr(result.decisions))
 
 
 if __name__ == "__main__":

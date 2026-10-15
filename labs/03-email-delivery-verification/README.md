@@ -26,10 +26,13 @@ The automated tests establish that:
 - a bounced message cannot later be recorded as delivered;
 - delivery cannot be recorded before provider acceptance;
 - a duplicate synthetic provider event is applied only once;
-- a stale event cannot overwrite newer delivery evidence; and
-- a contradictory later event cannot reverse a terminal delivery state.
+- a stale event cannot overwrite newer delivery evidence;
+- a contradictory later event cannot reverse a terminal delivery state; and
+- reconciliation decisions classify applied, duplicate, stale, and contradictory events without copying provider event detail into the decision record.
 
 The reconciliation slice uses fabricated event IDs and monotonic sequence numbers to make ordering decisions explicit. Events are processed in arrival order: duplicate IDs are ignored, events at or below the latest applied sequence are treated as stale, and transitions that contradict the delivery state machine are ignored rather than rewriting stronger evidence.
+
+Each processed event also produces a typed reconciliation decision containing only its synthetic event ID, sequence, and outcome. This keeps the audit boundary useful without requiring provider payload or message-content logging.
 
 Run the focused tests from the repository root:
 
@@ -39,10 +42,10 @@ PYTHONPATH=labs/03-email-delivery-verification python -m unittest discover -s la
 
 ## Limitations
 
-This is a state-machine and event-ordering experiment, not a deliverability simulator and not an integration with an email provider. The synthetic sequence is an explicit lab assumption; real providers may expose timestamps, attempt counters, webhook IDs, or other ordering semantics instead. The lab does not yet model authentication records, suppression lists, complaint events, retry timing, provider webhook signatures, mailbox placement, spam filtering, durable deduplication, or cryptographic verification of event provenance.
+This is a state-machine and event-ordering experiment, not a deliverability simulator and not an integration with an email provider. The synthetic sequence is an explicit lab assumption; real providers may expose timestamps, attempt counters, webhook IDs, or other ordering semantics instead. The in-memory decision records are not durable telemetry. The lab does not yet model authentication records, suppression lists, complaint events, retry timing, provider webhook signatures, mailbox placement, spam filtering, durable deduplication, or cryptographic verification of event provenance.
 
 All identifiers, event details, and mailbox behavior in this lab are synthetic. No real addresses, messages, provider payloads, or delivery logs are used.
 
 ## Next experiment
 
-A useful next slice is to make reconciliation decisions observable as typed outcomes so duplicate, stale, applied, and contradictory events can be audited without logging provider payload contents.
+A useful next slice is to test restart behavior by separating durable reconciliation state from the in-memory trace, making the limits of deduplication across process boundaries explicit.

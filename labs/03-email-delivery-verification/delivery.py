@@ -10,6 +10,13 @@ class DeliveryState(str, Enum):
     DELIVERED = "delivered"
 
 
+class ReconciliationOutcome(str, Enum):
+    APPLIED = "applied"
+    DUPLICATE = "duplicate"
+    STALE = "stale"
+    CONTRADICTORY = "contradictory"
+
+
 @dataclass(frozen=True)
 class DeliveryEvent:
     state: DeliveryState
@@ -56,48 +63,86 @@ class DeliveryTrace:
 
 
 @dataclass(frozen=True)
+class ReconciliationDecision:
+    event_id: str
+    sequence: int
+    outcome: ReconciliationOutcome
+
+
+@dataclass(frozen=True)
 class ReconciliationResult:
     trace: DeliveryTrace
-    applied_event_ids: tuple[str, ...]
-    ignored_event_ids: tuple[str, ...]
+    decisions: tuple[ReconciliationDecision, ...]
+
+    @property
+    def applied_event_ids(self) -> tuple[str, ...]:
+        return tuple(
+            decision.event_id
+            for decision in self.decisions
+            if decision.outcome is ReconciliationOutcome.APPLIED
+        )
+
+    @property
+    def ignored_event_ids(self) -> tuple[str, ...]:
+        return tuple(
+            decision.event_id
+            for decision in self.decisions
+            if decision.outcome is not ReconciliationOutcome.APPLIED
+        )
 
 
 def reconcile_provider_events(
     trace: DeliveryTrace, events: tuple[ProviderEvent, ...]
 ) -> ReconciliationResult:
-    """Apply provider evidence in sequence order without weakening state guarantees.
+    """Apply provider evidence and record content-minimizing reconciliation decisions.
 
     Duplicate event IDs are ignored after their first occurrence. Events at or below the
     latest applied sequence are stale. Contradictory transitions are ignored rather than
-    rewriting stronger evidence already present in the trace.
+    rewriting stronger evidence already present in the trace. Decisions intentionally omit
+    provider event detail so an audit trail does not require payload-content logging.
     """
     current = trace
     seen_ids: set[str] = set()
-    applied: list[str] = []
-    ignored: list[str] = []
+    decisions: list[ReconciliationDecision] = []
     latest_sequence = -1
 
     for event in events:
         if event.event_id in seen_ids:
-            ignored.append(event.event_id)
+            decisions.append(
+                ReconciliationDecision(
+                    event.event_id, event.sequence, ReconciliationOutcome.DUPLICATE
+                )
+            )
             continue
         seen_ids.add(event.event_id)
 
         if event.sequence <= latest_sequence:
-            ignored.append(event.event_id)
+            decisions.append(
+                ReconciliationDecision(
+                    event.event_id, event.sequence, ReconciliationOutcome.STALE
+                )
+            )
             continue
 
         candidate = DeliveryEvent(event.state, event.detail)
         try:
             current = current.record(candidate)
         except ValueError:
-            ignored.append(event.event_id)
+            decisions.append(
+                ReconciliationDecision(
+                    event.event_id, event.sequence, ReconciliationOutcome.CONTRADICTORY
+                )
+            )
             continue
 
-        applied.append(event.event_id)
+        decisions.append(
+            ReconciliationDecision(
+                event.event_id, event.sequence, ReconciliationOutcome.APPLIED
+            )
+        )
         latest_sequence = event.sequence
 
-    return ReconciliationResult(current, tuple(applied), tuple(ignored))
+    return ReconciliationResult(current, tuple(decisions))
 
 
 def generated(message_id: str = "msg-synthetic-001") -> DeliveryTrace:
