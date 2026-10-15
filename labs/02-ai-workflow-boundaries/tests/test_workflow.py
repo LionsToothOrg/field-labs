@@ -52,6 +52,16 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(result.validation.rejected[0][0].item_id, "ember")
         self.assertEqual(result.validation.rejected[0][1], ("unknown item",))
         self.assertIsNone(result.failure_decision)
+        self.assertEqual(
+            tuple(event.stage for event in result.trace),
+            (
+                workflow.WorkflowStage.ELIGIBILITY,
+                workflow.WorkflowStage.FLEXIBLE_STEP,
+                workflow.WorkflowStage.VALIDATION,
+            ),
+        )
+        self.assertEqual(result.trace[-1].outcome, "rejected")
+        self.assertEqual(result.trace[-1].detail, "1 accepted; 1 rejected")
 
     def test_workflow_rejects_factual_claim_after_eligibility(self):
         result = workflow.run_workflow(
@@ -65,6 +75,8 @@ class WorkflowTests(unittest.TestCase):
             result.validation.rejected[0][1],
             ("attribute mismatch: size",),
         )
+        self.assertEqual(result.trace[-1].stage, workflow.WorkflowStage.VALIDATION)
+        self.assertEqual(result.trace[-1].outcome, "rejected")
 
     def test_workflow_exposes_retry_policy_for_classified_failure(self):
         result = workflow.run_workflow(
@@ -80,6 +92,16 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(result.validation.accepted, ())
         self.assertEqual(result.validation.rejected, ())
         self.assertEqual(result.failure_decision.action, boundary.FailureAction.RETRY)
+        self.assertEqual(
+            tuple(event.stage for event in result.trace),
+            (
+                workflow.WorkflowStage.ELIGIBILITY,
+                workflow.WorkflowStage.FLEXIBLE_STEP,
+                workflow.WorkflowStage.FAILURE_POLICY,
+            ),
+        )
+        self.assertEqual(result.trace[1].outcome, "failed")
+        self.assertEqual(result.trace[-1].outcome, boundary.FailureAction.RETRY.value)
 
     def test_workflow_fails_nonrecoverable_failure_without_accepting_output(self):
         result = workflow.run_workflow(
@@ -94,6 +116,9 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(result.validation.accepted, ())
         self.assertEqual(result.validation.rejected, ())
         self.assertEqual(result.failure_decision.action, boundary.FailureAction.FAIL)
+        self.assertEqual(result.trace[-1].stage, workflow.WorkflowStage.FAILURE_POLICY)
+        self.assertEqual(result.trace[-1].outcome, boundary.FailureAction.FAIL.value)
+        self.assertNotIn("atlas", " ".join(event.detail for event in result.trace))
 
 
 if __name__ == "__main__":
