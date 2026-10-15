@@ -7,6 +7,7 @@ from delivery import (
     ReconciliationOutcome,
     generated,
     reconcile_provider_events,
+    restore_trace,
 )
 
 
@@ -113,19 +114,83 @@ class ProviderEventReconciliationTests(unittest.TestCase):
         )
 
     def test_decisions_do_not_copy_provider_detail(self):
-        sensitive_like_but_synthetic_detail = "synthetic payload body that should not be audited"
+        synthetic_detail = "synthetic payload body that should not be audited"
         event = ProviderEvent(
-            "evt-synthetic-030",
-            30,
-            DeliveryState.ACCEPTED,
-            sensitive_like_but_synthetic_detail,
+            "evt-synthetic-030", 30, DeliveryState.ACCEPTED, synthetic_detail
         )
 
         result = reconcile_provider_events(generated(), (event,))
 
         self.assertEqual(result.decisions[0].outcome, ReconciliationOutcome.APPLIED)
         self.assertFalse(hasattr(result.decisions[0], "detail"))
-        self.assertNotIn(sensitive_like_but_synthetic_detail, repr(result.decisions))
+        self.assertNotIn(synthetic_detail, repr(result.decisions))
+
+    def test_duplicate_is_rejected_after_restart(self):
+        accepted = ProviderEvent(
+            "evt-synthetic-040", 40, DeliveryState.ACCEPTED, "synthetic acceptance"
+        )
+        first = reconcile_provider_events(generated(), (accepted,))
+
+        restored = restore_trace(first.state)
+        after_restart = reconcile_provider_events(restored, (accepted,), first.state)
+
+        self.assertEqual(after_restart.trace.current_state, DeliveryState.ACCEPTED)
+        self.assertEqual(after_restart.applied_event_ids, ())
+        self.assertEqual(after_restart.decisions[0].outcome, ReconciliationOutcome.DUPLICATE)
+
+    def test_stale_event_is_rejected_after_restart(self):
+        first = reconcile_provider_events(
+            generated(),
+            (
+                ProviderEvent(
+                    "evt-synthetic-050", 50, DeliveryState.ACCEPTED, "synthetic acceptance"
+                ),
+                ProviderEvent(
+                    "evt-synthetic-052", 52, DeliveryState.DEFERRED, "synthetic deferral"
+                ),
+            ),
+        )
+        restored = restore_trace(first.state)
+        stale = ProviderEvent(
+            "evt-synthetic-051", 51, DeliveryState.DEFERRED, "late synthetic deferral"
+        )
+
+        after_restart = reconcile_provider_events(restored, (stale,), first.state)
+
+        self.assertEqual(after_restart.trace.current_state, DeliveryState.DEFERRED)
+        self.assertEqual(after_restart.decisions[0].outcome, ReconciliationOutcome.STALE)
+
+    def test_durable_state_does_not_copy_provider_detail(self):
+        synthetic_detail = "synthetic payload detail excluded from durable state"
+        result = reconcile_provider_events(
+            generated(),
+            (
+                ProviderEvent(
+                    "evt-synthetic-060",
+                    60,
+                    DeliveryState.ACCEPTED,
+                    synthetic_detail,
+                ),
+            ),
+        )
+
+        self.assertNotIn(synthetic_detail, repr(result.state))
+        self.assertEqual(result.state.current_state, DeliveryState.ACCEPTED)
+        self.assertEqual(result.state.latest_sequence, 60)
+        self.assertEqual(result.state.seen_event_ids, frozenset({"evt-synthetic-060"}))
+
+    def test_trace_and_restored_state_must_agree(self):
+        first = reconcile_provider_events(
+            generated(),
+            (
+                ProviderEvent(
+                    "evt-synthetic-070", 70, DeliveryState.ACCEPTED, "synthetic acceptance"
+                ),
+            ),
+        )
+
+        with self.assertRaises(ValueError):
+            reconcile_provider_events(generated(), (), first.state)
 
 
 if __name__ == "__main__":
