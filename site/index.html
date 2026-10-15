@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Field Labs: interactive, synthetic engineering experiments with reproducible evidence.">
+  <title>Field Labs // Off the Map</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="#top" aria-label="Field Labs home"><span class="mark">⌬</span> FIELD LABS</a>
+    <div class="status"><span class="pulse"></span> PUBLIC LAB BENCH</div>
+    <a class="source" href="https://github.com/LionsToothOrg/field-labs">SOURCE + EVIDENCE ↗</a>
+  </header>
+
+  <main id="top">
+    <section class="hero">
+      <div class="eyebrow">OFF THE MAP // ENGINEERING UNDER CONTROLLED CONDITIONS</div>
+      <h1>Build it. Break it.<br><span>Prove what changed.</span></h1>
+      <p>Interactive demonstrations of real engineering failure modes, rebuilt from scratch with synthetic data. The controls below are simulations of the repository's tested invariants, not production systems.</p>
+      <div class="hero-actions">
+        <a class="button primary" href="#lab-01">RUN AN EXPERIMENT ↓</a>
+        <a class="button" href="https://github.com/LionsToothOrg/field-labs#-the-lab-bench">READ THE METHOD ↗</a>
+      </div>
+      <div class="signal" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+    </section>
+
+    <section class="bench" aria-labelledby="bench-title">
+      <div class="section-label">THE LAB BENCH</div>
+      <h2 id="bench-title">Choose a failure boundary.</h2>
+      <div class="lab-grid">
+        <article class="lab-card complete">
+          <div class="lab-meta"><span>LAB 01</span><span class="state">● COMPLETE</span></div>
+          <h3>Transaction Reliability</h3>
+          <p>Race duplicate work, then enforce the invariant that only one state change wins.</p>
+          <a href="#lab-01">OPEN EXPERIMENT →</a>
+        </article>
+        <article class="lab-card active">
+          <div class="lab-meta"><span>LAB 02</span><span class="state">● ACTIVE</span></div>
+          <h3>AI Workflow Boundaries</h3>
+          <p>Keep hard constraints and catalog facts deterministic around flexible ranking.</p>
+          <a href="#lab-02">OPEN EXPERIMENT →</a>
+        </article>
+        <article class="lab-card queued">
+          <div class="lab-meta"><span>LAB 03</span><span class="state">○ QUEUED</span></div>
+          <h3>Email Delivery & Verification</h3>
+          <p>Trace the gap between “generated,” “accepted,” and actually delivered.</p>
+          <span class="muted">EXPERIMENT NOT YET BUILT</span>
+        </article>
+      </div>
+    </section>
+
+    <section class="experiment" id="lab-01" aria-labelledby="lab1-title">
+      <div class="experiment-head">
+        <div><div class="section-label">LAB 01 // COMPLETE</div><h2 id="lab1-title">The duplicate transaction</h2></div>
+        <a href="https://github.com/LionsToothOrg/field-labs/tree/main/labs/01-transaction-reliability">TESTS + FINDINGS ↗</a>
+      </div>
+      <p class="lede">Two synthetic workers receive the same request. Compare the unsafe check-then-write race with an idempotent boundary.</p>
+      <div class="control-row" role="group" aria-label="Transaction mode">
+        <button class="mode active" data-mode="unsafe" type="button">UNSAFE RACE</button>
+        <button class="mode" data-mode="protected" type="button">IDEMPOTENT BOUNDARY</button>
+        <button id="run-race" class="button primary" type="button">RUN RACE</button>
+      </div>
+      <div class="race-stage" aria-live="polite">
+        <div class="worker" id="worker-a"><strong>WORKER A</strong><span>READY</span><div class="track"><b></b></div></div>
+        <div class="gate"><span>STATE<br>BOUNDARY</span></div>
+        <div class="worker" id="worker-b"><strong>WORKER B</strong><span>READY</span><div class="track"><b></b></div></div>
+      </div>
+      <div class="result-panel" id="race-result"><span class="result-kicker">OBSERVATION</span><strong>Select a mode and run the synthetic race.</strong><p>No result is shown until you run the demonstration.</p></div>
+    </section>
+
+    <section class="experiment" id="lab-02" aria-labelledby="lab2-title">
+      <div class="experiment-head">
+        <div><div class="section-label">LAB 02 // ACTIVE</div><h2 id="lab2-title">Keep AI inside the rails</h2></div>
+        <a href="https://github.com/LionsToothOrg/field-labs/tree/main/labs/02-ai-workflow-boundaries">SOURCE + TESTS ↗</a>
+      </div>
+      <p class="lede">Hard eligibility happens before the flexible step. Authoritative facts are checked again afterward. Try to inject an ineligible item and watch the boundary reject it.</p>
+      <div class="pipeline" aria-label="AI workflow boundary">
+        <div class="node">SYNTHETIC<br>CATALOG</div><span>→</span><div class="node hard">DETERMINISTIC<br>FILTER</div><span>→</span><div class="node flex">FLEXIBLE<br>RANKING</div><span>→</span><div class="node hard">FACT<br>VALIDATION</div>
+      </div>
+      <div class="ai-controls">
+        <label>Required environment
+          <select id="environment"><option value="indoor">Indoor</option><option value="outdoor">Outdoor</option></select>
+        </label>
+        <label class="check"><input id="inject" type="checkbox"> Inject an ineligible recommendation</label>
+        <button id="run-boundary" class="button primary" type="button">RUN BOUNDARY</button>
+      </div>
+      <div class="catalog" id="catalog" aria-live="polite"></div>
+      <div class="result-panel" id="boundary-result"><span class="result-kicker">BOUNDARY TRACE</span><strong>Waiting for input.</strong><p>The demo uses only the synthetic catalog embedded in this page.</p></div>
+    </section>
+
+    <section class="protocol">
+      <div class="section-label">LAB RULE 00</div>
+      <blockquote>If it hasn't been measured, it isn't presented as a result.</blockquote>
+      <p>This interface visualizes the repository's engineering ideas. Automated tests in GitHub remain the evidence for implemented behavior.</p>
+    </section>
+  </main>
+
+  <footer><span>BUILD → BREAK → TRACE → FIX → PROVE → DOCUMENT</span><span>FIELD LABS // SYNTHETIC BY DEFAULT</span></footer>
+  <script src="app.js"></script>
+</body>
+</html>
