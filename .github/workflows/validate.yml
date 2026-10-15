@@ -35,5 +35,11 @@ jobs:
       - name: Validate interactive lab bench JavaScript
         run: node --check site/app.js
 
+      - name: Validate public workbench structure
+        run: node site/validate-site.js
+
+      - name: Validate compact desktop workbench budget
+        run: node site/validate-workbench.js
+
       - name: Validate static hosting inputs
         run: test -s site/index.html && test -s site/styles.css && test -s amplify.yml
