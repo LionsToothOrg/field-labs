@@ -49,10 +49,12 @@ The composed workflow makes the sequence itself testable: eligibility happens be
 
 The stage trace adds evidence about *how* a result was reached. Tests can assert that validation followed the flexible handoff on a normal path, or that failure policy replaced validation after a classified failure. The trace intentionally records counts, classifications, actions, and reasons rather than generated content.
 
-## Limitations and next experiment
+See [`FINDINGS.md`](FINDINGS.md) for the evidence map, conclusions, and explicit non-claims that close this investigation.
+
+## Limitations
 
 This is a deterministic boundary test, not an evaluation of an AI provider, retrieval system, embedding model, or prompt. It does not measure recommendation relevance, semantic recall, latency, cost, or model accuracy. Constraints are exact string matches over a tiny in-memory catalog; there is no schema normalization, numeric/range comparison, persistence layer, or runtime sandbox around an external model.
 
-The workflow receives a precomputed synthetic ranking result rather than invoking a model, and failure classification is still supplied by the caller. It does not parse provider exceptions, perform backoff or jitter, persist attempts, execute retries, or define provider-specific semantics. Stage events are in-memory teaching artifacts rather than a durable telemetry or audit system. Those behaviors should remain separate until there is evidence that adding them improves the experiment rather than obscuring the boundary being studied.
+The workflow receives a precomputed synthetic ranking result rather than invoking a model, and failure classification is still supplied by the caller. It does not parse provider exceptions, perform backoff or jitter, persist attempts, execute retries, or define provider-specific semantics. Stage events are in-memory teaching artifacts rather than a durable telemetry or audit system.
 
-A useful next slice is to close Lab 02 with a concise findings document that maps each tested boundary to its evidence and explicitly distinguishes what the lab establishes from what remains untested before advancing the catalog.
+Those limitations are intentionally left visible rather than expanded into provider-specific work. The tested boundary question has reached a useful stopping point, so the catalog can advance to the next planned investigation without implying these untested behaviors are solved.
