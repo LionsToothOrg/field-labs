@@ -3,101 +3,88 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Field Labs: interactive, synthetic engineering experiments with reproducible evidence.">
-  <title>Field Labs // Off the Map</title>
+  <meta name="description" content="Field Labs reverse-engineers engineering problems and rebuilds them from scratch with synthetic data.">
+  <title>Field Labs // Reverse-engineered problems</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <header class="topbar">
-    <a class="brand" href="#top" aria-label="Field Labs home"><span class="mark">⌬</span> FIELD LABS</a>
-    <div class="status"><span class="pulse"></span> PUBLIC LAB BENCH</div>
+    <a class="brand" href="#top">FIELD LABS <small>/ OFF THE MAP</small></a>
     <a class="source" href="https://github.com/LionsToothOrg/field-labs">SOURCE + EVIDENCE ↗</a>
   </header>
 
   <main id="top">
-    <section class="hero">
-      <div class="eyebrow">OFF THE MAP // ENGINEERING UNDER CONTROLLED CONDITIONS</div>
-      <h1>Build it. Break it.<br><span>Prove what changed.</span></h1>
-      <p>Interactive demonstrations of real engineering failure modes, rebuilt from scratch with synthetic data. The controls below are simulations of the repository's tested invariants, not production systems.</p>
-      <div class="hero-actions">
-        <a class="button primary" href="#lab-01">RUN AN EXPERIMENT ↓</a>
-        <a class="button" href="https://github.com/LionsToothOrg/field-labs#-the-lab-bench">READ THE METHOD ↗</a>
+    <section class="intro">
+      <div class="intro-copy">
+        <p class="kicker">REVERSE ENGINEERING / SYNTHETIC SYSTEMS</p>
+        <h1>Real problems.<br>Rebuilt from<br><em>first principles.</em></h1>
+        <p class="definition">Field Labs takes engineering problems encountered in the wild, deconstructs what makes them technically interesting, and rebuilds them from scratch with synthetic data to explore, solve, and validate them.</p>
+        <a class="text-link" href="#bench">OPEN THE INVESTIGATION INDEX ↓</a>
       </div>
-      <div class="signal" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
-    </section>
-
-    <section class="bench" aria-labelledby="bench-title">
-      <div class="section-label">THE LAB BENCH</div>
-      <h2 id="bench-title">Choose a failure boundary.</h2>
-      <div class="lab-grid">
-        <article class="lab-card complete">
-          <div class="lab-meta"><span>LAB 01</span><span class="state">● COMPLETE</span></div>
-          <h3>Transaction Reliability</h3>
-          <p>Race duplicate work, then enforce the invariant that only one state change wins.</p>
-          <a href="#lab-01">OPEN EXPERIMENT →</a>
-        </article>
-        <article class="lab-card active">
-          <div class="lab-meta"><span>LAB 02</span><span class="state">● ACTIVE</span></div>
-          <h3>AI Workflow Boundaries</h3>
-          <p>Keep hard constraints and catalog facts deterministic around flexible ranking.</p>
-          <a href="#lab-02">OPEN EXPERIMENT →</a>
-        </article>
-        <article class="lab-card queued">
-          <div class="lab-meta"><span>LAB 03</span><span class="state">○ QUEUED</span></div>
-          <h3>Email Delivery & Verification</h3>
-          <p>Trace the gap between “generated,” “accepted,” and actually delivered.</p>
-          <span class="muted">EXPERIMENT NOT YET BUILT</span>
-        </article>
+      <div class="exploded" aria-label="Exploded system diagram">
+        <span class="measure m1">INPUT</span><span class="measure m2">BOUNDARY</span><span class="measure m3">STATE</span>
+        <div class="part p1"><b>01</b><span>signal</span></div>
+        <div class="connector c1"></div>
+        <div class="part p2"><b>02</b><span>constraint</span></div>
+        <div class="connector c2"></div>
+        <div class="part p3"><b>03</b><span>mutation</span></div>
+        <div class="orbit"></div>
+        <p>ANATOMY OF A SYSTEM<br><small>pull it apart / rebuild it / prove it</small></p>
       </div>
     </section>
 
-    <section class="experiment" id="lab-01" aria-labelledby="lab1-title">
-      <div class="experiment-head">
-        <div><div class="section-label">LAB 01 // COMPLETE</div><h2 id="lab1-title">The duplicate transaction</h2></div>
-        <a href="https://github.com/LionsToothOrg/field-labs/tree/main/labs/01-transaction-reliability">TESTS + FINDINGS ↗</a>
-      </div>
-      <p class="lede">Two synthetic workers receive the same request. Compare the unsafe check-then-write race with an idempotent boundary.</p>
-      <div class="control-row" role="group" aria-label="Transaction mode">
-        <button class="mode active" data-mode="unsafe" type="button">UNSAFE RACE</button>
-        <button class="mode" data-mode="protected" type="button">IDEMPOTENT BOUNDARY</button>
-        <button id="run-race" class="button primary" type="button">RUN RACE</button>
-      </div>
-      <div class="race-stage" aria-live="polite">
-        <div class="worker" id="worker-a"><strong>WORKER A</strong><span>READY</span><div class="track"><b></b></div></div>
-        <div class="gate"><span>STATE<br>BOUNDARY</span></div>
-        <div class="worker" id="worker-b"><strong>WORKER B</strong><span>READY</span><div class="track"><b></b></div></div>
-      </div>
-      <div class="result-panel" id="race-result"><span class="result-kicker">OBSERVATION</span><strong>Select a mode and run the synthetic race.</strong><p>No result is shown until you run the demonstration.</p></div>
+    <section class="method-strip" aria-label="Field Labs method">
+      <span>OBSERVE</span><i>01</i><span>DECONSTRUCT</span><i>02</i><span>REBUILD</span><i>03</i><span>TEST</span><i>04</i><span>SOLVE</span><i>05</i><span>VALIDATE</span>
     </section>
 
-    <section class="experiment" id="lab-02" aria-labelledby="lab2-title">
-      <div class="experiment-head">
-        <div><div class="section-label">LAB 02 // ACTIVE</div><h2 id="lab2-title">Keep AI inside the rails</h2></div>
-        <a href="https://github.com/LionsToothOrg/field-labs/tree/main/labs/02-ai-workflow-boundaries">SOURCE + TESTS ↗</a>
-      </div>
-      <p class="lede">Hard eligibility happens before the flexible step. Authoritative facts are checked again afterward. Try to inject an ineligible item and watch the boundary reject it.</p>
-      <div class="pipeline" aria-label="AI workflow boundary">
-        <div class="node">SYNTHETIC<br>CATALOG</div><span>→</span><div class="node hard">DETERMINISTIC<br>FILTER</div><span>→</span><div class="node flex">FLEXIBLE<br>RANKING</div><span>→</span><div class="node hard">FACT<br>VALIDATION</div>
-      </div>
-      <div class="ai-controls">
-        <label>Required environment
-          <select id="environment"><option value="indoor">Indoor</option><option value="outdoor">Outdoor</option></select>
-        </label>
-        <label class="check"><input id="inject" type="checkbox"> Inject an ineligible recommendation</label>
-        <button id="run-boundary" class="button primary" type="button">RUN BOUNDARY</button>
-      </div>
-      <div class="catalog" id="catalog" aria-live="polite"></div>
-      <div class="result-panel" id="boundary-result"><span class="result-kicker">BOUNDARY TRACE</span><strong>Waiting for input.</strong><p>The demo uses only the synthetic catalog embedded in this page.</p></div>
+    <section class="bench" id="bench">
+      <header class="section-head"><div><p class="kicker">INVESTIGATION INDEX</p><h2>The bench</h2></div><p>Each investigation starts with a technical problem, not a product idea. Completed work exposes its implementation, tests, findings, and limitations.</p></header>
+
+      <article class="lab-row complete">
+        <div class="lab-number">01</div>
+        <div class="lab-main"><div class="lab-status">COMPLETE</div><h3>Transaction Reliability</h3><p>What happens when duplicate work reaches shared state at the same time?</p><div class="tags">CONCURRENCY / IDEMPOTENCY / OUTBOX / LEASES / RETRY / RECOVERY</div></div>
+        <div class="mini-system race-mini"><span>A</span><i></i><b>STATE</b><i></i><span>B</span></div>
+        <a href="#lab-01" class="enter">ENTER<br>INVESTIGATION ↘</a>
+      </article>
+
+      <article class="lab-row active">
+        <div class="lab-number">02</div>
+        <div class="lab-main"><div class="lab-status">ACTIVE</div><h3>AI Workflow Boundaries</h3><p>Which decisions belong to flexible interpretation, and which must remain deterministic?</p><div class="tags">ELIGIBILITY / RANKING / VALIDATION / FAILURE POLICY</div></div>
+        <div class="mini-system boundary-mini"><span>DATA</span><i></i><b>AI</b><i></i><span>CHECK</span></div>
+        <a href="#lab-02" class="enter">ENTER<br>INVESTIGATION ↘</a>
+      </article>
+
+      <article class="lab-row planned"><div class="lab-number">03</div><div class="lab-main"><div class="lab-status">NEXT</div><h3>Email Delivery & Verification</h3><p>Where does a message go between “generated” and actually delivered?</p><div class="tags">DELIVERY / AUTHENTICATION / SUPPRESSION / EVIDENCE</div></div><div class="not-built">NOT YET INVESTIGATED</div></article>
+      <article class="lab-row ghost"><div class="lab-number">04–08</div><div class="lab-main"><div class="lab-status">PLANNED</div><h3>More problems on the bench</h3><p>Session reliability, document systems, offline reconciliation, and grounded discovery.</p></div></article>
     </section>
 
-    <section class="protocol">
-      <div class="section-label">LAB RULE 00</div>
-      <blockquote>If it hasn't been measured, it isn't presented as a result.</blockquote>
-      <p>This interface visualizes the repository's engineering ideas. Automated tests in GitHub remain the evidence for implemented behavior.</p>
+    <section class="investigation" id="lab-01">
+      <aside><p class="kicker">INVESTIGATION 01</p><div class="rail"><span class="on">OBSERVE</span><span>DECONSTRUCT</span><span>REBUILD</span><span>TEST</span><span>SOLVE</span><span>VALIDATE</span></div></aside>
+      <div class="investigation-body">
+        <div class="lab-status">COMPLETE / SYNTHETIC</div><h2>Transaction Reliability</h2><h4>The problem</h4><p class="question">Two workers receive the same logical transaction. Can both mutate state before either sees what the other did?</p>
+        <div class="diagram-label">REPRODUCTION / INTERACTIVE MODEL</div>
+        <div class="race-stage" aria-live="polite"><div class="worker" id="worker-a"><strong>REQUEST A</strong><span>READY</span><div class="track"><b></b></div></div><div class="gate"><span>SHARED<br>STATE</span></div><div class="worker" id="worker-b"><strong>REQUEST B</strong><span>READY</span><div class="track"><b></b></div></div></div>
+        <div class="control-row"><button class="mode active" data-mode="unsafe" type="button">01 / UNSAFE CHECK</button><button class="mode" data-mode="protected" type="button">02 / IDEMPOTENT BOUNDARY</button><button id="run-race" class="run" type="button">RUN REPRODUCTION →</button></div>
+        <div class="result-panel" id="race-result"><small>OBSERVATION</small><strong>Run the synthetic reproduction.</strong><p>The visual model explains the behavior. Repository tests remain the evidence.</p></div>
+        <div class="evidence"><div><small>WHAT THE LAB GREW INTO</small><p>Idempotency → durable state → transactional outbox → worker leases → bounded retry → quarantine + replay.</p></div><a href="https://github.com/LionsToothOrg/field-labs/tree/main/labs/01-transaction-reliability">IMPLEMENTATION + TESTS ↗</a></div>
+      </div>
     </section>
+
+    <section class="investigation" id="lab-02">
+      <aside><p class="kicker">INVESTIGATION 02</p><div class="rail"><span class="on">OBSERVE</span><span>DECONSTRUCT</span><span>REBUILD</span><span>TEST</span><span>SOLVE</span><span>VALIDATE</span></div></aside>
+      <div class="investigation-body">
+        <div class="lab-status">ACTIVE / SYNTHETIC</div><h2>AI Workflow Boundaries</h2><h4>The question</h4><p class="question">Where should deterministic software stop and flexible interpretation begin?</p>
+        <div class="boundary-map"><div><small>AUTHORITATIVE</small><b>CATALOG</b></div><i>→</i><div class="hard"><small>DETERMINISTIC</small><b>ELIGIBILITY</b></div><i>→</i><div class="flex"><small>FLEXIBLE</small><b>RANKING</b></div><i>→</i><div class="hard"><small>DETERMINISTIC</small><b>VALIDATION</b></div></div>
+        <div class="ai-controls"><label>HARD CONSTRAINT<select id="environment"><option value="indoor">Indoor</option><option value="outdoor">Outdoor</option></select></label><label class="check"><input id="inject" type="checkbox"> Inject an ineligible recommendation</label><button id="run-boundary" class="run" type="button">TRACE BOUNDARY →</button></div>
+        <div class="catalog" id="catalog" aria-live="polite"></div>
+        <div class="result-panel" id="boundary-result"><small>BOUNDARY TRACE</small><strong>Waiting for input.</strong><p>Only fabricated catalog data is used here.</p></div>
+        <div class="evidence"><div><small>CURRENT SCOPE</small><p>Deterministic filtering, bounded handoff, factual validation, and typed failure policy. No external AI provider is called.</p></div><a href="https://github.com/LionsToothOrg/field-labs/tree/main/labs/02-ai-workflow-boundaries">IMPLEMENTATION + TESTS ↗</a></div>
+      </div>
+    </section>
+
+    <section class="manifesto"><p class="kicker">FIELD NOTE / 00</p><blockquote>The problem is the starting material.<br><strong>The engineering is the work.</strong></blockquote><p>Everything shown here is rebuilt independently with fabricated systems and synthetic data. Visual demonstrations explain the experiments; tests and documented evidence support the engineering claims.</p></section>
   </main>
-
-  <footer><span>BUILD → BREAK → TRACE → FIX → PROVE → DOCUMENT</span><span>FIELD LABS // SYNTHETIC BY DEFAULT</span></footer>
+  <footer><span>FIELD LABS / OFF THE MAP</span><span>REVERSE ENGINEER → REBUILD → VALIDATE</span><a href="https://github.com/LionsToothOrg/field-labs">GITHUB ↗</a></footer>
   <script src="app.js"></script>
 </body>
 </html>
