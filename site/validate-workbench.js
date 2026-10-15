@@ -3,14 +3,17 @@ const fs = require('fs');
 const css = fs.readFileSync('site/styles.css', 'utf8');
 
 const expectations = [
-  ['compact introduction padding', '.intro{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(360px,.8fr);gap:56px;align-items:center;padding:56px 0 46px'],
-  ['bounded desktop headline', 'font-size:clamp(38px,5vw,68px)'],
-  ['compact bench padding', '.bench{padding:46px 0 76px}'],
-  ['compact investigation rows', 'min-height:132px']
+  ['bounded spatial introduction', '.intro{min-height:330px;display:grid;grid-template-columns:repeat(12,1fr);gap:18px;align-items:center;padding:42px 0 34px'],
+  ['bounded desktop headline', 'font-size:clamp(38px,4.4vw,64px)'],
+  ['compact bench padding', '.bench{padding:42px 0 86px}'],
+  ['compact investigation rows', 'min-height:132px'],
+  ['offset investigation index', '.lab-row:nth-of-type(2){margin-left:12%}'],
+  ['spatial investigation canvas', '.investigation{position:relative;display:grid;grid-template-columns:repeat(12,1fr)'],
+  ['linear responsive fallback', '.lab-row,.lab-row:nth-of-type(n){width:100%;margin-left:0']
 ];
 
 for (const [label, marker] of expectations) {
   if (!css.includes(marker)) throw new Error(`Workbench budget failed: ${label}`);
 }
 
-console.log('Compact desktop workbench budget validated.');
+console.log('Spatial desktop workbench budget validated.');
