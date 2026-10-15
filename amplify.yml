@@ -1,0 +1,13 @@
+version: 1
+frontend:
+  phases:
+    build:
+      commands:
+        - mkdir -p dist
+        - cp -R site/. dist/
+  artifacts:
+    baseDirectory: dist
+    files:
+      - '**/*'
+  cache:
+    paths: []
