@@ -1,10 +1,13 @@
 import unittest
 
 from concurrency import (
+    RetryDeadlineExceeded,
     RetryExhausted,
+    RetryPolicy,
     SyntheticStateStore,
     VersionConflict,
     reconcile_with_retry,
+    reconcile_with_timed_retry,
 )
 from delivery import DeliveryState, ProviderEvent, ReconciliationState
 
@@ -68,6 +71,34 @@ class BoundedRetryTests(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "at least 1"):
             reconcile_with_retry(store, self.delivered, max_attempts=0)
+
+    def test_timed_retry_records_deterministic_delay_before_success(self):
+        store = ConflictOnceStore(self.initial_state)
+        policy = RetryPolicy(delays_ms=(25, 50), deadline_ms=100)
+
+        result = reconcile_with_timed_retry(store, self.delivered, policy)
+
+        self.assertEqual(result.attempts, 2)
+        self.assertEqual(result.elapsed_ms, 25)
+        self.assertEqual(result.scheduled_delays_ms, (25,))
+        self.assertEqual(result.snapshot.state.current_state, DeliveryState.DELIVERED)
+
+    def test_timed_retry_refuses_attempt_that_would_cross_deadline(self):
+        store = AlwaysConflictStore(self.initial_state)
+        policy = RetryPolicy(delays_ms=(40, 40), deadline_ms=60)
+
+        with self.assertRaisesRegex(RetryDeadlineExceeded, "60ms"):
+            reconcile_with_timed_retry(store, self.delivered, policy)
+
+        self.assertEqual(store.write_attempts, 2)
+        self.assertNotIn("evt-synthetic-201", store.read().state.seen_event_ids)
+
+    def test_retry_policy_rejects_negative_timing_values(self):
+        with self.assertRaisesRegex(ValueError, "non-negative"):
+            RetryPolicy(delays_ms=(-1,), deadline_ms=10)
+
+        with self.assertRaisesRegex(ValueError, "non-negative"):
+            RetryPolicy(delays_ms=(1,), deadline_ms=-1)
 
 
 if __name__ == "__main__":
