@@ -31,14 +31,18 @@ The automated tests establish that:
 - reconciliation decisions classify applied, duplicate, stale, and contradictory events without copying provider event detail into the decision record;
 - persisted reconciliation state can reject duplicate and stale events after a simulated process restart;
 - durable reconciliation state retains only the current delivery state, synthetic event IDs, and latest applied sequence, not provider event detail;
-- two workers reading the same state can lose stronger delivery evidence when they write independently; and
-- a version-checked conditional write rejects an obsolete worker snapshot, allowing a retry from fresh state to preserve terminal delivery evidence.
+- two workers reading the same state can lose stronger delivery evidence when they write independently;
+- a version-checked conditional write rejects an obsolete worker snapshot, allowing a retry from fresh state to preserve terminal delivery evidence;
+- a bounded retry re-reads and re-reconciles after a synthetic conditional-write conflict; and
+- exhausting the retry budget raises an explicit failure without committing the pending event.
 
 The reconciliation slice uses fabricated event IDs and monotonic sequence numbers to make ordering decisions explicit. Events are processed in arrival order: duplicate IDs are ignored, events at or below the latest applied sequence are treated as stale, and transitions that contradict the delivery state machine are ignored rather than rewriting stronger evidence.
 
 Each processed event also produces a typed reconciliation decision containing only its synthetic event ID, sequence, and outcome. A separate immutable reconciliation state captures the minimum information this experiment needs across a process boundary: current delivery state, previously seen event IDs, and the latest applied sequence. `restore_trace` reconstructs a content-free runtime trace from that state so historical provider detail does not need to be persisted for reconciliation.
 
 The concurrency experiment adds a deliberately tiny in-memory state-store boundary. `write_unchecked` exists only to reproduce a lost-update race: two workers can read the same accepted state, independently derive delivered and deferred states, then overwrite one another. `compare_and_swap` adds a version precondition so the second write fails when its read snapshot is obsolete. Retrying that event from the fresh delivered state lets the existing reconciliation rules classify the later deferral as contradictory instead of weakening delivery evidence.
+
+`reconcile_with_retry` makes that retry behavior explicit and bounded. Each attempt reads a fresh version, re-runs reconciliation, and conditionally writes the result. A conflict consumes one attempt; exhausting the configured budget raises `RetryExhausted` rather than looping indefinitely or implying success. The helper deliberately has no sleep or backoff behavior so this experiment measures the state contract separately from scheduling policy.
 
 Run the focused tests from the repository root:
 
@@ -48,10 +52,10 @@ PYTHONPATH=labs/03-email-delivery-verification python -m unittest discover -s la
 
 ## Limitations
 
-This is a state-machine, restart-boundary, and concurrency experiment, not a deliverability simulator and not an integration with an email provider. The synthetic sequence is an explicit lab assumption; real providers may expose timestamps, attempt counters, webhook IDs, or other ordering semantics instead. `ReconciliationState` models what would need to survive a restart but does not itself provide storage or retention. `SyntheticStateStore` is process-local and deterministic; its version check demonstrates the conditional-write contract but does not establish database transaction semantics, distributed locking, retry/backoff policy, crash recovery, multi-region consistency, or production-grade multi-worker coordination. The lab does not model authentication records, suppression lists, complaint events, retry timing, provider webhook signatures, mailbox placement, spam filtering, or cryptographic verification of event provenance.
+This is a state-machine, restart-boundary, and concurrency experiment, not a deliverability simulator and not an integration with an email provider. The synthetic sequence is an explicit lab assumption; real providers may expose timestamps, attempt counters, webhook IDs, or other ordering semantics instead. `ReconciliationState` models what would need to survive a restart but does not itself provide storage or retention. `SyntheticStateStore` is process-local and deterministic; its version check demonstrates the conditional-write contract but does not establish database transaction semantics, distributed locking, crash recovery, multi-region consistency, or production-grade multi-worker coordination. The bounded retry policy counts attempts only; it does not model backoff, jitter, deadlines, cancellation, queue redelivery, or overload behavior. The lab does not model authentication records, suppression lists, complaint events, provider webhook signatures, mailbox placement, spam filtering, or cryptographic verification of event provenance.
 
 All identifiers, event details, and mailbox behavior in this lab are synthetic. No real addresses, messages, provider payloads, or delivery logs are used.
 
 ## Next experiment
 
-A useful next slice is to make the conditional-write retry policy explicit and bounded, including what happens when repeated conflicts exhaust a small retry budget, without presenting the in-memory store as production persistence.
+A useful next slice is to make retry timing observable with a deterministic synthetic backoff policy, including a total retry deadline, without introducing real sleeps or claiming production queue behavior.
