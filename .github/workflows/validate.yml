@@ -35,6 +35,9 @@ jobs:
       - name: Run email delivery evidence tests
         run: PYTHONPATH=labs/03-email-delivery-verification python -m unittest discover -s labs/03-email-delivery-verification/tests -v
 
+      - name: Run web session reliability tests
+        run: PYTHONPATH=labs/04-web-session-reliability python -m unittest discover -s labs/04-web-session-reliability/tests -v
+
       - name: Validate interactive lab bench JavaScript
         run: node --check site/app.js
 
