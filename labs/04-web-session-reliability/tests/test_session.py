@@ -84,6 +84,46 @@ class SerializedRefreshTests(unittest.TestCase):
         self.assertEqual(self.store.generation, generation_before_rejection)
 
 
+class RefreshRecoveryTests(unittest.TestCase):
+    def setUp(self):
+        self.store = SyntheticSessionStore()
+        self.initial_token = self.store.current_refresh_token
+
+    def test_owned_attempt_reports_that_it_rotated_state(self):
+        attempt = self.store.begin_refresh(self.initial_token)
+
+        resolution = self.store.finish_refresh_or_recover(attempt)
+
+        self.assertTrue(resolution.rotated)
+        self.assertEqual(resolution.result.refresh_token, "refresh-synthetic-1")
+        self.assertEqual(self.store.generation, 1)
+
+    def test_losing_attempt_reuses_winning_state_without_second_rotation(self):
+        first = self.store.begin_refresh(self.initial_token)
+        second = self.store.begin_refresh(self.initial_token)
+
+        winner = self.store.finish_refresh_or_recover(first)
+        loser = self.store.finish_refresh_or_recover(second)
+
+        self.assertTrue(winner.rotated)
+        self.assertFalse(loser.rotated)
+        self.assertEqual(loser.result, winner.result)
+        self.assertEqual(self.store.current_refresh_token, winner.result.refresh_token)
+        self.assertEqual(self.store.generation, 1)
+
+    def test_attempt_cannot_recover_after_session_advances_again(self):
+        stale = self.store.begin_refresh(self.initial_token)
+        first = self.store.begin_refresh(self.initial_token)
+        first_result = self.store.finish_refresh(first)
+        next_attempt = self.store.begin_refresh(first_result.refresh_token)
+        self.store.finish_refresh(next_attempt)
+
+        with self.assertRaises(StaleRefreshAttempt):
+            self.store.finish_refresh_or_recover(stale)
+
+        self.assertEqual(self.store.generation, 2)
+
+
 class ConditionalStoreTests(unittest.TestCase):
     def test_matching_expectation_rotates_once(self):
         storage = InMemorySessionStore()

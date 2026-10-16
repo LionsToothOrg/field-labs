@@ -22,6 +22,12 @@ class RefreshResult:
 
 
 @dataclass(frozen=True)
+class RefreshResolution:
+    result: RefreshResult
+    rotated: bool
+
+
+@dataclass(frozen=True)
 class SessionSnapshot:
     refresh_token: str
     generation: int
@@ -98,3 +104,21 @@ class SyntheticSessionStore:
         if result is None:
             raise StaleRefreshAttempt("session state changed before refresh completed")
         return result
+
+    def finish_refresh_or_recover(self, attempt: RefreshAttempt) -> RefreshResolution:
+        """Rotate when owned, or reuse the immediately winning state after a conflict."""
+        result = self._storage.conditional_rotate(
+            expected_token=attempt.presented_token,
+            expected_generation=attempt.observed_generation,
+        )
+        if result is not None:
+            return RefreshResolution(result=result, rotated=True)
+
+        current = self._storage.read()
+        if current.generation != attempt.observed_generation + 1:
+            raise StaleRefreshAttempt("session advanced beyond recoverable refresh state")
+
+        return RefreshResolution(
+            result=RefreshResult(current.refresh_token, current.generation),
+            rotated=False,
+        )
