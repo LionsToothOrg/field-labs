@@ -38,6 +38,9 @@ jobs:
       - name: Run web session reliability tests
         run: PYTHONPATH=labs/04-web-session-reliability python -m unittest discover -s labs/04-web-session-reliability/tests -v
 
+      - name: Run document annotation tests
+        run: PYTHONPATH=labs/05-document-annotation python -m unittest discover -s labs/05-document-annotation/tests -v
+
       - name: Validate interactive lab bench JavaScript
         run: node --check site/app.js
 
