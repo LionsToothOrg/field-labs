@@ -41,6 +41,9 @@ jobs:
       - name: Run document annotation tests
         run: PYTHONPATH=labs/05-document-annotation python -m unittest discover -s labs/05-document-annotation/tests -v
 
+      - name: Run verified document pipeline tests
+        run: PYTHONPATH=labs/06-verified-document-pipeline python -m unittest discover -s labs/06-verified-document-pipeline/tests -v
+
       - name: Validate interactive lab bench JavaScript
         run: node --check site/app.js
 
