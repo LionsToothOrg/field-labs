@@ -2,19 +2,23 @@
 
 ## Question
 
-How can an annotation stay attached to the intended synthetic text when an earlier document edit shifts its original character offsets?
+How can an annotation stay attached to the intended synthetic text when document edits shift its original character offsets or introduce a duplicate quote?
 
 ## Synthetic baseline
 
-This slice models a plain-text document and one annotation entirely in memory. The fixture is fabricated for this lab and contains no uploaded documents, client material, or real-person data.
+This lab models a plain-text document and one annotation entirely in memory. The fixture is fabricated for this lab and contains no uploaded documents, client material, or real-person data.
 
-`create_annotation` records both the selected text and its start/end offsets. `resolve_by_offsets` deliberately demonstrates the fragile baseline: after text is inserted before the annotation, the old offsets point at the wrong characters.
+`create_annotation` records the selected text, its start/end offsets, and a bounded 16-character neighborhood on each side. `resolve_by_offsets` deliberately demonstrates the fragile baseline: after text is inserted before the annotation, the old offsets point at the wrong characters.
 
 ## Quote-based re-anchoring
 
-`resolve_by_unique_text` searches the revised document for the annotation's exact synthetic selection. When there is exactly one match, it returns the new offsets. This is intentionally a small recovery rule rather than a complete annotation format.
+`resolve_by_unique_text` searches the revised document for the annotation's exact synthetic selection. When there is exactly one match, it returns the new offsets. The resolver fails closed when the selection is missing or appears more than once.
 
-The resolver fails closed when the selection is missing or appears more than once. Guessing between duplicate matches would make the demo look more capable while hiding an unresolved anchoring problem.
+## Context-aware disambiguation
+
+`resolve_by_context` addresses one narrow duplicate-quote case. It considers every exact quote match and accepts a candidate only when both its captured prefix and suffix still match. Recovery succeeds only when exactly one candidate retains that neighborhood.
+
+This is intentionally conservative. If multiple candidates have the same neighborhood, or an edit changes the captured neighborhood, the resolver returns no anchor rather than guessing. Context is a disambiguation signal here, not proof of semantic identity.
 
 ## Run the validation
 
@@ -24,14 +28,14 @@ From the repository root:
 PYTHONPATH=labs/05-document-annotation python -m unittest discover -s labs/05-document-annotation/tests -v
 ```
 
-The focused suite checks initial capture, deterministic offset drift after an insertion, successful unique-text re-anchoring, and refusal to guess when the selected text is ambiguous.
+The focused suite checks initial capture, deterministic offset drift, unique-text recovery, quote-only ambiguity, context-based duplicate disambiguation, duplicate-context refusal, and refusal when the captured neighborhood changed.
 
 ## What this slice establishes
 
-Absolute offsets alone are not stable identifiers for changing text. In the controlled fixture, inserting a synthetic preface moves the intended selection while the stored offsets remain unchanged. An exact unique-text quote is enough to recover this specific edit and produces repeatable new offsets.
+Absolute offsets alone are not stable identifiers for changing text. Exact quote matching can recover a moved unique selection, while a small captured neighborhood can safely distinguish a duplicated quote in the controlled fixture when exactly one occurrence preserves that context.
 
 ## Limitations
 
-This is a synthetic text-anchoring experiment, not a document editor or production annotation system. It does not model PDFs, DOM ranges, rich text, OCR, page geometry, collaborative editing, deletions inside the selection, fuzzy matching, revision history, persistence, permissions, or merge conflicts.
+This is a synthetic text-anchoring experiment, not a document editor or production annotation system. It does not model PDFs, DOM ranges, rich text, OCR, page geometry, collaborative editing, edits inside the selection, fuzzy matching, revision history, persistence, permissions, or merge conflicts.
 
-Exact-text recovery also has a deliberate boundary: duplicate or modified selections are unresolved. A later slice can add surrounding context as a disambiguation signal if it answers the next reliability question without pretending to solve arbitrary document revision.
+The fixed context window is deliberately simple. It does not rank partial matches or infer intent, and it fails closed when context is changed or duplicated. A later experiment could compare stronger anchoring strategies, but only with explicit synthetic cases and measurable acceptance rules.
