@@ -5,6 +5,7 @@ from concurrency import (
     RetryCancelled,
     RetryDeadlineExceeded,
     RetryExhausted,
+    RetryOutcome,
     RetryPolicy,
     SyntheticStateStore,
     VersionConflict,
@@ -84,40 +85,65 @@ class BoundedRetryTests(unittest.TestCase):
         self.assertEqual(result.elapsed_ms, 25)
         self.assertEqual(result.scheduled_delays_ms, (25,))
         self.assertEqual(result.snapshot.state.current_state, DeliveryState.DELIVERED)
+        self.assertEqual(result.metric.outcome, RetryOutcome.SUCCEEDED)
 
     def test_timed_retry_refuses_attempt_that_would_cross_deadline(self):
         store = AlwaysConflictStore(self.initial_state)
         policy = RetryPolicy(delays_ms=(40, 40), deadline_ms=60)
 
-        with self.assertRaisesRegex(RetryDeadlineExceeded, "60ms"):
+        with self.assertRaisesRegex(RetryDeadlineExceeded, "60ms") as raised:
             reconcile_with_timed_retry(store, self.delivered, policy)
 
         self.assertEqual(store.write_attempts, 2)
         self.assertNotIn("evt-synthetic-201", store.read().state.seen_event_ids)
+        self.assertEqual(raised.exception.metric.outcome, RetryOutcome.DEADLINE_EXCEEDED)
+        self.assertEqual(raised.exception.metric.attempts, 2)
+        self.assertEqual(raised.exception.metric.elapsed_ms, 40)
+        self.assertEqual(raised.exception.metric.scheduled_delays_ms, (40,))
+
+    def test_timed_retry_exhaustion_exposes_content_free_metric(self):
+        store = AlwaysConflictStore(self.initial_state)
+        policy = RetryPolicy(delays_ms=(10,), deadline_ms=100)
+
+        with self.assertRaises(RetryExhausted) as raised:
+            reconcile_with_timed_retry(store, self.delivered, policy)
+
+        self.assertEqual(raised.exception.metric.outcome, RetryOutcome.EXHAUSTED)
+        self.assertEqual(raised.exception.metric.attempts, 2)
+        self.assertEqual(raised.exception.metric.elapsed_ms, 10)
+        self.assertEqual(raised.exception.metric.scheduled_delays_ms, (10,))
+        self.assertNotIn("evt-synthetic-201", repr(raised.exception.metric))
+        self.assertNotIn("synthetic delivery", repr(raised.exception.metric))
 
     def test_cancellation_before_first_attempt_does_not_touch_store(self):
         store = AlwaysConflictStore(self.initial_state)
         policy = RetryPolicy(delays_ms=(25,), deadline_ms=100)
         cancellation = RetryCancellation(cancel_before_attempt=1)
 
-        with self.assertRaisesRegex(RetryCancelled, "before attempt 1"):
+        with self.assertRaisesRegex(RetryCancelled, "before attempt 1") as raised:
             reconcile_with_timed_retry(store, self.delivered, policy, cancellation)
 
         self.assertEqual(store.write_attempts, 0)
         self.assertEqual(store.read().version, 0)
         self.assertNotIn("evt-synthetic-201", store.read().state.seen_event_ids)
+        self.assertEqual(raised.exception.metric.outcome, RetryOutcome.CANCELLED)
+        self.assertEqual(raised.exception.metric.attempts, 0)
 
     def test_cancellation_stops_retry_after_conflict_without_committing_event(self):
         store = AlwaysConflictStore(self.initial_state)
         policy = RetryPolicy(delays_ms=(25, 50), deadline_ms=100)
         cancellation = RetryCancellation(cancel_before_attempt=2)
 
-        with self.assertRaisesRegex(RetryCancelled, "before attempt 2"):
+        with self.assertRaisesRegex(RetryCancelled, "before attempt 2") as raised:
             reconcile_with_timed_retry(store, self.delivered, policy, cancellation)
 
         self.assertEqual(store.write_attempts, 1)
         self.assertEqual(store.read().state.current_state, DeliveryState.ACCEPTED)
         self.assertNotIn("evt-synthetic-201", store.read().state.seen_event_ids)
+        self.assertEqual(raised.exception.metric.outcome, RetryOutcome.CANCELLED)
+        self.assertEqual(raised.exception.metric.attempts, 1)
+        self.assertEqual(raised.exception.metric.elapsed_ms, 25)
+        self.assertEqual(raised.exception.metric.scheduled_delays_ms, (25,))
 
     def test_cancellation_is_distinct_from_deadline_exhaustion(self):
         store = AlwaysConflictStore(self.initial_state)
