@@ -29,6 +29,11 @@ def render_summary(record: SummaryRecord, *, omit_reference: bool = False) -> st
     return "\n".join(lines) + "\n"
 
 
+def serialize_summary(document: str) -> bytes:
+    """Serialize the rendered artifact at the boundary a downstream step receives."""
+    return document.encode("utf-8")
+
+
 def verify_summary(document: str, record: SummaryRecord) -> VerificationResult:
     """Require every exact source-derived field line to appear in the artifact."""
     required = {
@@ -40,3 +45,15 @@ def verify_summary(document: str, record: SummaryRecord) -> VerificationResult:
     document_lines = set(document.splitlines())
     missing = tuple(name for name, line in required.items() if line not in document_lines)
     return VerificationResult(is_valid=not missing, missing_fields=missing)
+
+
+def verify_serialized_summary(artifact: bytes, record: SummaryRecord) -> VerificationResult:
+    """Verify the serialized bytes that cross the generation boundary."""
+    try:
+        document = artifact.decode("utf-8", errors="strict")
+    except UnicodeDecodeError:
+        return VerificationResult(
+            is_valid=False,
+            missing_fields=("serialized_artifact",),
+        )
+    return verify_summary(document, record)
