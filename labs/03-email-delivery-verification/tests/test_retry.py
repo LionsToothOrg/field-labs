@@ -1,6 +1,8 @@
 import unittest
 
 from concurrency import (
+    RetryCancellation,
+    RetryCancelled,
     RetryDeadlineExceeded,
     RetryExhausted,
     RetryPolicy,
@@ -93,12 +95,51 @@ class BoundedRetryTests(unittest.TestCase):
         self.assertEqual(store.write_attempts, 2)
         self.assertNotIn("evt-synthetic-201", store.read().state.seen_event_ids)
 
+    def test_cancellation_before_first_attempt_does_not_touch_store(self):
+        store = AlwaysConflictStore(self.initial_state)
+        policy = RetryPolicy(delays_ms=(25,), deadline_ms=100)
+        cancellation = RetryCancellation(cancel_before_attempt=1)
+
+        with self.assertRaisesRegex(RetryCancelled, "before attempt 1"):
+            reconcile_with_timed_retry(store, self.delivered, policy, cancellation)
+
+        self.assertEqual(store.write_attempts, 0)
+        self.assertEqual(store.read().version, 0)
+        self.assertNotIn("evt-synthetic-201", store.read().state.seen_event_ids)
+
+    def test_cancellation_stops_retry_after_conflict_without_committing_event(self):
+        store = AlwaysConflictStore(self.initial_state)
+        policy = RetryPolicy(delays_ms=(25, 50), deadline_ms=100)
+        cancellation = RetryCancellation(cancel_before_attempt=2)
+
+        with self.assertRaisesRegex(RetryCancelled, "before attempt 2"):
+            reconcile_with_timed_retry(store, self.delivered, policy, cancellation)
+
+        self.assertEqual(store.write_attempts, 1)
+        self.assertEqual(store.read().state.current_state, DeliveryState.ACCEPTED)
+        self.assertNotIn("evt-synthetic-201", store.read().state.seen_event_ids)
+
+    def test_cancellation_is_distinct_from_deadline_exhaustion(self):
+        store = AlwaysConflictStore(self.initial_state)
+        policy = RetryPolicy(delays_ms=(40,), deadline_ms=20)
+        cancellation = RetryCancellation(cancel_before_attempt=2)
+
+        with self.assertRaises(RetryDeadlineExceeded) as raised:
+            reconcile_with_timed_retry(store, self.delivered, policy, cancellation)
+
+        self.assertNotIsInstance(raised.exception, RetryCancelled)
+        self.assertEqual(store.write_attempts, 1)
+
     def test_retry_policy_rejects_negative_timing_values(self):
         with self.assertRaisesRegex(ValueError, "non-negative"):
             RetryPolicy(delays_ms=(-1,), deadline_ms=10)
 
         with self.assertRaisesRegex(ValueError, "non-negative"):
             RetryPolicy(delays_ms=(1,), deadline_ms=-1)
+
+    def test_cancellation_requires_a_valid_attempt_number(self):
+        with self.assertRaisesRegex(ValueError, "at least 1"):
+            RetryCancellation(cancel_before_attempt=0)
 
 
 if __name__ == "__main__":

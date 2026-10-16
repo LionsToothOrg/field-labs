@@ -15,6 +15,10 @@ class RetryDeadlineExceeded(RetryExhausted):
     """Raised when the next synthetic retry delay would exceed the deadline."""
 
 
+class RetryCancelled(RuntimeError):
+    """Raised when deterministic cancellation stops reconciliation before an attempt."""
+
+
 @dataclass(frozen=True)
 class VersionedState:
     version: int
@@ -33,6 +37,20 @@ class RetryPolicy:
             raise ValueError("retry delays must be non-negative")
         if self.deadline_ms < 0:
             raise ValueError("deadline_ms must be non-negative")
+
+
+@dataclass(frozen=True)
+class RetryCancellation:
+    """Synthetic cancellation signal that becomes active before a numbered attempt."""
+
+    cancel_before_attempt: int
+
+    def __post_init__(self):
+        if self.cancel_before_attempt < 1:
+            raise ValueError("cancel_before_attempt must be at least 1")
+
+    def is_cancelled(self, attempt: int) -> bool:
+        return attempt >= self.cancel_before_attempt
 
 
 @dataclass(frozen=True)
@@ -103,16 +121,22 @@ def reconcile_with_timed_retry(
     store: SyntheticStateStore,
     event: ProviderEvent,
     policy: RetryPolicy,
+    cancellation: RetryCancellation | None = None,
 ) -> TimedRetryResult:
-    """Reconcile with deterministic synthetic delays and a total retry deadline.
+    """Reconcile with deterministic synthetic delays, deadline, and cancellation.
 
-    No sleeping or wall-clock access occurs. Each configured delay represents time that would
-    pass before the next attempt; a retry is refused when that delay would exceed the deadline.
+    No sleeping or wall-clock access occurs. Cancellation is checked before each attempt, so a
+    cancelled attempt never reads, reconciles, or writes state. Each configured delay represents
+    time that would pass before the next attempt; a retry is refused when that delay would exceed
+    the deadline.
     """
     elapsed_ms = 0
     scheduled_delays: list[int] = []
 
     for attempt in range(1, len(policy.delays_ms) + 2):
+        if cancellation is not None and cancellation.is_cancelled(attempt):
+            raise RetryCancelled(f"retry cancelled before attempt {attempt}")
+
         snapshot = store.read()
         result = reconcile_provider_events(
             restore_trace(snapshot.state), (event,), snapshot.state
