@@ -1,6 +1,11 @@
 import unittest
 
-from annotation import create_annotation, resolve_by_offsets, resolve_by_unique_text
+from annotation import (
+    create_annotation,
+    resolve_by_context,
+    resolve_by_offsets,
+    resolve_by_unique_text,
+)
 
 
 BASE_DOCUMENT = (
@@ -41,11 +46,34 @@ class AnnotationAnchoringTests(unittest.TestCase):
         self.assertEqual(SELECTION, revised[resolved.start_offset : resolved.end_offset])
         self.assertGreater(resolved.start_offset, annotation.start_offset)
 
-    def test_duplicate_selection_is_left_unresolved(self):
+    def test_duplicate_selection_is_left_unresolved_by_quote_only(self):
         annotation = create_annotation(BASE_DOCUMENT, SELECTION)
         ambiguous = f"{BASE_DOCUMENT} Repeated note: {SELECTION}"
 
         self.assertIsNone(resolve_by_unique_text(ambiguous, annotation))
+
+    def test_context_disambiguates_duplicate_quote_when_one_neighborhood_matches(self):
+        annotation = create_annotation(BASE_DOCUMENT, SELECTION)
+        revised = f"Preface. {BASE_DOCUMENT} Repeated note: {SELECTION}"
+
+        resolved = resolve_by_context(revised, annotation)
+
+        self.assertIsNotNone(resolved)
+        self.assertEqual(SELECTION, revised[resolved.start_offset : resolved.end_offset])
+        self.assertEqual(revised.index(SELECTION), resolved.start_offset)
+
+    def test_context_fails_closed_when_duplicate_neighborhoods_match(self):
+        annotation = create_annotation(BASE_DOCUMENT, SELECTION)
+        repeated_segment = "alpha section. Beta finding needs review. Gamma appendix."
+        ambiguous = f"Synthetic report: {repeated_segment} Copy: {repeated_segment}"
+
+        self.assertIsNone(resolve_by_context(ambiguous, annotation))
+
+    def test_context_fails_closed_when_neighborhood_changed(self):
+        annotation = create_annotation(BASE_DOCUMENT, SELECTION)
+        revised = BASE_DOCUMENT.replace("Gamma appendix.", "Delta appendix.", 1)
+
+        self.assertIsNone(resolve_by_context(revised, annotation))
 
 
 if __name__ == "__main__":
