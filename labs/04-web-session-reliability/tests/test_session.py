@@ -1,6 +1,11 @@
 import unittest
 
-from session import InvalidRefreshToken, StaleRefreshAttempt, SyntheticSessionStore
+from session import (
+    InMemorySessionStore,
+    InvalidRefreshToken,
+    StaleRefreshAttempt,
+    SyntheticSessionStore,
+)
 
 
 class ConcurrentRefreshBaselineTests(unittest.TestCase):
@@ -77,6 +82,48 @@ class SerializedRefreshTests(unittest.TestCase):
 
         self.assertEqual(self.store.current_refresh_token, token_before_rejection)
         self.assertEqual(self.store.generation, generation_before_rejection)
+
+
+class ConditionalStoreTests(unittest.TestCase):
+    def test_matching_expectation_rotates_once(self):
+        storage = InMemorySessionStore()
+
+        result = storage.conditional_rotate(
+            expected_token="refresh-synthetic-0",
+            expected_generation=0,
+        )
+
+        self.assertIsNotNone(result)
+        self.assertEqual(storage.read().refresh_token, "refresh-synthetic-1")
+        self.assertEqual(storage.read().generation, 1)
+
+    def test_stale_generation_returns_conflict_without_mutation(self):
+        storage = InMemorySessionStore()
+        storage.conditional_rotate(
+            expected_token="refresh-synthetic-0",
+            expected_generation=0,
+        )
+        before = storage.read()
+
+        result = storage.conditional_rotate(
+            expected_token="refresh-synthetic-0",
+            expected_generation=0,
+        )
+
+        self.assertIsNone(result)
+        self.assertEqual(storage.read(), before)
+
+    def test_matching_generation_with_wrong_token_returns_conflict(self):
+        storage = InMemorySessionStore()
+        before = storage.read()
+
+        result = storage.conditional_rotate(
+            expected_token="refresh-synthetic-other",
+            expected_generation=0,
+        )
+
+        self.assertIsNone(result)
+        self.assertEqual(storage.read(), before)
 
 
 if __name__ == "__main__":
