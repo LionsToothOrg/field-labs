@@ -37,8 +37,9 @@ The automated tests establish that:
 - exhausting the retry budget raises an explicit failure without committing the pending event;
 - deterministic synthetic retry delays are observable without sleeping or reading wall-clock time;
 - a retry is refused when its configured delay would cross the total synthetic deadline;
-- cancellation before an attempt prevents that attempt from reading, reconciling, or writing state; and
-- cancellation is an explicit outcome distinct from retry-budget and deadline exhaustion.
+- cancellation before an attempt prevents that attempt from reading, reconciling, or writing state;
+- cancellation is an explicit outcome distinct from retry-budget and deadline exhaustion; and
+- success, exhaustion, deadline, and cancellation expose the same content-free retry metric shape without provider event IDs, message detail, or payload data.
 
 The reconciliation slice uses fabricated event IDs and monotonic sequence numbers to make ordering decisions explicit. Events are processed in arrival order: duplicate IDs are ignored, events at or below the latest applied sequence are treated as stale, and transitions that contradict the delivery state machine are ignored rather than rewriting stronger evidence.
 
@@ -52,6 +53,8 @@ The concurrency experiment adds a deliberately tiny in-memory state-store bounda
 
 `RetryCancellation` adds a deliberately small cancellation boundary. The synthetic signal becomes active before a configured attempt number, and cancellation is checked before that attempt reads or mutates the store. `RetryCancelled` is separate from `RetryExhausted` and `RetryDeadlineExceeded`, so callers can distinguish an explicit stop request from resource exhaustion. The signal models only deterministic control flow; it is not a thread, process, queue, or operating-system cancellation primitive.
 
+`RetryMetric` gives every terminal timed-retry path the same small observation shape: outcome, completed attempt count, elapsed synthetic milliseconds, and scheduled synthetic delays. Successful calls expose the metric on `TimedRetryResult`; exhaustion, deadline, and cancellation exceptions expose it on the exception. The metric deliberately excludes event IDs, provider detail, message content, payloads, and store state. It is evidence for this experiment, not a production telemetry schema.
+
 Run the focused tests from the repository root:
 
 ```bash
@@ -60,10 +63,10 @@ PYTHONPATH=labs/03-email-delivery-verification python -m unittest discover -s la
 
 ## Limitations
 
-This is a state-machine, restart-boundary, and concurrency experiment, not a deliverability simulator and not an integration with an email provider. The synthetic sequence is an explicit lab assumption; real providers may expose timestamps, attempt counters, webhook IDs, or other ordering semantics instead. `ReconciliationState` models what would need to survive a restart but does not itself provide storage or retention. `SyntheticStateStore` is process-local and deterministic; its version check demonstrates the conditional-write contract but does not establish database transaction semantics, distributed locking, crash recovery, multi-region consistency, or production-grade multi-worker coordination. Retry delays, deadlines, and cancellation are deterministic synthetic values: they do not model wall-clock drift, jitter, asynchronous cancellation, queue redelivery, overload behavior, or a production scheduler. The lab does not model authentication records, suppression lists, complaint events, provider webhook signatures, mailbox placement, spam filtering, or cryptographic verification of event provenance.
+This is a state-machine, restart-boundary, and concurrency experiment, not a deliverability simulator and not an integration with an email provider. The synthetic sequence is an explicit lab assumption; real providers may expose timestamps, attempt counters, webhook IDs, or other ordering semantics instead. `ReconciliationState` models what would need to survive a restart but does not itself provide storage or retention. `SyntheticStateStore` is process-local and deterministic; its version check demonstrates the conditional-write contract but does not establish database transaction semantics, distributed locking, crash recovery, multi-region consistency, or production-grade multi-worker coordination. Retry delays, deadlines, cancellation, and metrics are deterministic synthetic values: they do not model wall-clock drift, jitter, asynchronous cancellation, queue redelivery, overload behavior, production telemetry, or a production scheduler. The lab does not model authentication records, suppression lists, complaint events, provider webhook signatures, mailbox placement, spam filtering, or cryptographic verification of event provenance.
 
 All identifiers, event details, and mailbox behavior in this lab are synthetic. No real addresses, messages, provider payloads, or delivery logs are used.
 
 ## Next experiment
 
-A useful next slice is to make retry outcomes observable as a small typed result or metric record, while preserving the lab's content-minimizing boundary and avoiding production telemetry claims.
+This is a sensible stopping point for the retry/concurrency thread. A future Lab 03 slice should be driven by a new delivery-verification question rather than adding retry machinery for its own sake; otherwise the catalog can advance to the next planned lab.
