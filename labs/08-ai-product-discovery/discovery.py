@@ -9,6 +9,7 @@ class Product:
     category: str
     max_load_kg: int
     indoor_only: bool
+    stock_count: int
 
 
 @dataclass(frozen=True)
@@ -22,6 +23,7 @@ class Constraints:
     category: str
     minimum_load_kg: int
     require_outdoor: bool = False
+    require_in_stock: bool = False
 
 
 @dataclass(frozen=True)
@@ -52,6 +54,10 @@ def _qualification_evidence(
                 "outdoor_use", "indoor_only", str(product.indoor_only).lower()
             )
         )
+    if constraints.require_in_stock:
+        evidence.append(
+            QualificationEvidence("in_stock", "stock_count", str(product.stock_count))
+        )
     return tuple(evidence)
 
 
@@ -72,6 +78,8 @@ def discover(
         if product.max_load_kg < constraints.minimum_load_kg:
             continue
         if constraints.require_outdoor and product.indoor_only:
+            continue
+        if constraints.require_in_stock and product.stock_count <= 0:
             continue
         eligible.append((candidate.semantic_score, product))
 
