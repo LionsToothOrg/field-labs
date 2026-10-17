@@ -28,6 +28,13 @@ class CircuitBreakerTests(unittest.TestCase):
         self.assertFalse(decision.allowed)
         self.assertEqual(decision.retry_after_seconds, 21)
 
+    def test_rejects_clock_regression_while_open(self):
+        breaker = CircuitBreaker(failure_threshold=1, recovery_timeout_seconds=30)
+        breaker.record_failure(now=10)
+
+        with self.assertRaisesRegex(ValueError, "cannot precede"):
+            breaker.before_call(now=9)
+
     def test_allowed_and_probe_blocked_decisions_have_no_retry_delay(self):
         breaker = CircuitBreaker(failure_threshold=1, recovery_timeout_seconds=10)
         self.assertIsNone(breaker.before_call(now=0).retry_after_seconds)

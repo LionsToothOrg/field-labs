@@ -26,11 +26,11 @@ PYTHONPATH=labs/10-circuit-breaker-recovery \
   python -m unittest discover -s labs/10-circuit-breaker-recovery/tests -v
 ```
 
-The tests exercise threshold opening, failure-count reset, timeout gating, remaining-delay reporting, single-probe admission, successful recovery, failed-probe reopening, and invalid configuration.
+The tests exercise threshold opening, failure-count reset, timeout gating, remaining-delay reporting, clock-regression rejection, single-probe admission, successful recovery, failed-probe reopening, and invalid configuration.
 
 ## Design choices
 
-- **Explicit time:** the caller supplies `now`; tests do not sleep or depend on wall-clock timing.
+- **Explicit monotonic time:** the caller supplies `now`; tests do not sleep or depend on wall-clock timing. While the circuit is open, a timestamp earlier than `opened_at` is rejected instead of producing an impossible recovery delay.
 - **Consecutive failures:** a success resets the closed-state failure count.
 - **One half-open probe:** additional calls are rejected while a probe outcome is pending.
 - **Inspectable decisions:** rejected calls explain whether the recovery timeout is pending or a probe is already in flight.
