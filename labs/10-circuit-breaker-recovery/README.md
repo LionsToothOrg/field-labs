@@ -12,9 +12,10 @@ Retries bound one operation, but repeated operations can still keep hitting a de
 
 1. While **closed**, calls are allowed and consecutive failures are counted.
 2. At the configured failure threshold, the circuit becomes **open** and calls fail fast locally.
-3. After the recovery timeout, the circuit becomes **half-open** and permits one probe.
-4. A successful probe closes the circuit and clears the failure count.
-5. A failed probe reopens the circuit and starts a new recovery timeout.
+3. While recovery is pending, rejected calls expose the remaining delay so callers can avoid blind polling.
+4. After the recovery timeout, the circuit becomes **half-open** and permits one probe.
+5. A successful probe closes the circuit and clears the failure count.
+6. A failed probe reopens the circuit and starts a new recovery timeout.
 
 The single-probe gate matters because a timeout expiring should not turn recovery into a thundering herd.
 
@@ -25,7 +26,7 @@ PYTHONPATH=labs/10-circuit-breaker-recovery \
   python -m unittest discover -s labs/10-circuit-breaker-recovery/tests -v
 ```
 
-The tests exercise threshold opening, failure-count reset, timeout gating, single-probe admission, successful recovery, failed-probe reopening, and invalid configuration.
+The tests exercise threshold opening, failure-count reset, timeout gating, remaining-delay reporting, single-probe admission, successful recovery, failed-probe reopening, and invalid configuration.
 
 ## Design choices
 
@@ -33,11 +34,12 @@ The tests exercise threshold opening, failure-count reset, timeout gating, singl
 - **Consecutive failures:** a success resets the closed-state failure count.
 - **One half-open probe:** additional calls are rejected while a probe outcome is pending.
 - **Inspectable decisions:** rejected calls explain whether the recovery timeout is pending or a probe is already in flight.
+- **Actionable open-state timing:** timeout rejections report `retry_after_seconds`; other decisions leave it unset rather than inventing a delay.
 - **No transport coupling:** the breaker does not decide which HTTP statuses or exceptions count as failures. That classification belongs at the caller boundary.
 
 ## What this slice demonstrates
 
-The implementation demonstrates deterministic circuit-state transitions and probe admission under synthetic outcomes. Automated tests can repeatedly verify those state-machine rules.
+The implementation demonstrates deterministic circuit-state transitions, recovery timing, and probe admission under synthetic outcomes. Automated tests can repeatedly verify those state-machine rules.
 
 ## Limitations
 
