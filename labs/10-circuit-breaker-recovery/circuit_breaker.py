@@ -15,6 +15,7 @@ class Decision:
     allowed: bool
     state: CircuitState
     reason: str
+    retry_after_seconds: float | None = None
 
 
 class CircuitBreaker:
@@ -40,8 +41,14 @@ class CircuitBreaker:
     def before_call(self, *, now: float) -> Decision:
         if self.state is CircuitState.OPEN:
             assert self.opened_at is not None
-            if now - self.opened_at < self.recovery_timeout_seconds:
-                return Decision(False, self.state, "recovery_timeout_pending")
+            elapsed = now - self.opened_at
+            if elapsed < self.recovery_timeout_seconds:
+                return Decision(
+                    False,
+                    self.state,
+                    "recovery_timeout_pending",
+                    retry_after_seconds=self.recovery_timeout_seconds - elapsed,
+                )
             self.state = CircuitState.HALF_OPEN
 
         if self.state is CircuitState.HALF_OPEN:

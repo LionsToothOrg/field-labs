@@ -19,6 +19,26 @@ class CircuitBreakerTests(unittest.TestCase):
         self.assertFalse(decision.allowed)
         self.assertEqual(decision.reason, "recovery_timeout_pending")
 
+    def test_open_decision_reports_remaining_recovery_delay(self):
+        breaker = CircuitBreaker(failure_threshold=1, recovery_timeout_seconds=30)
+        breaker.record_failure(now=3)
+
+        decision = breaker.before_call(now=12)
+
+        self.assertFalse(decision.allowed)
+        self.assertEqual(decision.retry_after_seconds, 21)
+
+    def test_allowed_and_probe_blocked_decisions_have_no_retry_delay(self):
+        breaker = CircuitBreaker(failure_threshold=1, recovery_timeout_seconds=10)
+        self.assertIsNone(breaker.before_call(now=0).retry_after_seconds)
+        breaker.record_failure(now=1)
+
+        probe = breaker.before_call(now=11)
+        blocked = breaker.before_call(now=11)
+
+        self.assertIsNone(probe.retry_after_seconds)
+        self.assertIsNone(blocked.retry_after_seconds)
+
     def test_success_resets_consecutive_failures(self):
         breaker = CircuitBreaker(failure_threshold=2, recovery_timeout_seconds=30)
 
