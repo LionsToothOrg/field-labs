@@ -12,6 +12,7 @@ This directory is the current index of implemented Field Labs. Each lab is a sel
 | [06](06-verified-document-pipeline/) | Verified Document Pipeline | Verifying generated document data and serialized artifacts |
 | [07](07-offline-event-check-in/) | Offline Event Check-In | Offline acceptance, reconciliation, and idempotent replay |
 | [08](08-ai-product-discovery/) | AI Product Discovery | Semantic retrieval bounded by authoritative catalog facts |
+| [09](09-bounded-api-retries/) | Bounded API Retries | Transient failure classification, backoff, and retry exhaustion |
 
 ## Reading the labs
 

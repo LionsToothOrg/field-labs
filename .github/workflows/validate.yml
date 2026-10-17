@@ -50,6 +50,9 @@ jobs:
       - name: Run AI product discovery tests
         run: PYTHONPATH=labs/08-ai-product-discovery python -m unittest discover -s labs/08-ai-product-discovery/tests -v
 
+      - name: Run bounded API retry tests
+        run: PYTHONPATH=labs/09-bounded-api-retries python -m unittest discover -s labs/09-bounded-api-retries/tests -v
+
       - name: Validate interactive lab bench JavaScript
         run: node --check site/app.js
 
