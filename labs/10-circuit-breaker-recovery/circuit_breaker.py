@@ -42,6 +42,8 @@ class CircuitBreaker:
         if self.state is CircuitState.OPEN:
             assert self.opened_at is not None
             elapsed = now - self.opened_at
+            if elapsed < 0:
+                raise ValueError("now cannot precede the circuit open timestamp")
             if elapsed < self.recovery_timeout_seconds:
                 return Decision(
                     False,
