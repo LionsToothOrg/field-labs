@@ -16,6 +16,12 @@ The first slice treats semantic retrieval as an untrusted candidate generator. A
 
 If no authoritative candidate satisfies the requested constraints, the result is empty. The experiment deliberately prefers "no match" over invented specifications.
 
+## Evidence-backed explanations
+
+Eligible results include structured qualification evidence for each applied requirement. Every evidence item names the requirement, the authoritative catalog field used to evaluate it, and the observed catalog value. Semantic relevance remains useful for ordering eligible candidates, but it is not presented as evidence about a product's specifications.
+
+This keeps a downstream explanation layer bounded: it can explain why a synthetic product qualified by referring to facts already present in the catalog instead of generating unsupported product claims.
+
 ## Run the validation
 
 From the repository root:
@@ -24,12 +30,12 @@ From the repository root:
 PYTHONPATH=labs/08-ai-product-discovery python -m unittest discover -s labs/08-ai-product-discovery/tests -v
 ```
 
-The focused suite checks authoritative hydration, hard-constraint precedence over semantic score, rejection of unknown candidate IDs, outdoor-use filtering, and an explicit empty result when no candidate qualifies.
+The focused suite checks authoritative hydration, hard-constraint precedence over semantic score, rejection of unknown candidate IDs, outdoor-use filtering, an explicit empty result when no candidate qualifies, catalog-backed qualification evidence, and exclusion of semantic score from product-fact evidence.
 
 ## What this slice establishes
 
-Semantic relevance and product truth can have separate responsibilities. In this controlled fixture, retrieval can rank possible matches, but only catalog-backed facts and deterministic constraints decide which products are eligible to return.
+Semantic relevance and product truth can have separate responsibilities. In this controlled fixture, retrieval can rank possible matches, but only catalog-backed facts and deterministic constraints decide which products are eligible to return. Explanations can then expose the exact catalog observations used for those decisions without turning retrieval scores into product claims.
 
 ## Limitations
 
-This slice does not implement embeddings, vector search, natural-language constraint extraction, an LLM, fuzzy units, catalog persistence, catalog freshness, pagination, price or inventory rules, ranking calibration, explanations, or production recommendation quality. Semantic scores are supplied by the fixture so the experiment can isolate the trust boundary between retrieval and authoritative product data.
+This slice does not implement embeddings, vector search, natural-language constraint extraction, an LLM, fuzzy units, catalog persistence, catalog freshness, pagination, price or inventory rules, ranking calibration, natural-language explanation generation, citations to external sources, or production recommendation quality. Semantic scores are supplied by the fixture so the experiment can isolate the trust boundary between retrieval and authoritative product data.
