@@ -101,6 +101,52 @@ class RetryPolicyTests(unittest.TestCase):
             result,
         )
 
+    def test_total_delay_budget_stops_before_scheduling_excess_wait(self):
+        result = plan_retries(
+            [AttemptResult(503), AttemptResult(503), AttemptResult(200)],
+            base_delay_seconds=2,
+            max_total_delay_seconds=5,
+        )
+
+        self.assertEqual(
+            [
+                RetryDecision(1, 503, "retry", 2),
+                RetryDecision(2, 503, "delay_budget_exhausted", None),
+            ],
+            result,
+        )
+
+    def test_total_delay_budget_allows_exact_remaining_wait(self):
+        result = plan_retries(
+            [AttemptResult(503), AttemptResult(503), AttemptResult(200)],
+            base_delay_seconds=2,
+            max_total_delay_seconds=6,
+        )
+
+        self.assertEqual(
+            [
+                RetryDecision(1, 503, "retry", 2),
+                RetryDecision(2, 503, "retry", 4),
+                RetryDecision(3, 200, "succeed", None),
+            ],
+            result,
+        )
+
+    def test_retry_after_cannot_push_wait_past_total_delay_budget(self):
+        result = plan_retries(
+            [AttemptResult(429, retry_after_seconds=12), AttemptResult(200)],
+            max_total_delay_seconds=10,
+        )
+
+        self.assertEqual(
+            [RetryDecision(1, 429, "delay_budget_exhausted", None)],
+            result,
+        )
+
+    def test_negative_total_delay_budget_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "max_total_delay_seconds"):
+            plan_retries([AttemptResult(503)], max_total_delay_seconds=-1)
+
 
 if __name__ == "__main__":
     unittest.main()

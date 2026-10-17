@@ -29,6 +29,7 @@ def plan_retries(
     max_attempts: int = 4,
     base_delay_seconds: int = 1,
     max_delay_seconds: int = 30,
+    max_total_delay_seconds: int | None = None,
     operation_is_idempotent: bool = True,
 ) -> list[RetryDecision]:
     """Build deterministic retry decisions from a synthetic sequence of responses."""
@@ -36,8 +37,11 @@ def plan_retries(
         raise ValueError("max_attempts must be at least 1")
     if base_delay_seconds < 0 or max_delay_seconds < 0:
         raise ValueError("delay bounds cannot be negative")
+    if max_total_delay_seconds is not None and max_total_delay_seconds < 0:
+        raise ValueError("max_total_delay_seconds cannot be negative")
 
     decisions: list[RetryDecision] = []
+    scheduled_delay_seconds = 0
 
     for attempt, result in enumerate(results, start=1):
         if attempt > max_attempts:
@@ -67,6 +71,16 @@ def plan_retries(
             raise ValueError("retry_after_seconds cannot be negative")
 
         delay = max(backoff, retry_after or 0)
+        if (
+            max_total_delay_seconds is not None
+            and scheduled_delay_seconds + delay > max_total_delay_seconds
+        ):
+            decisions.append(
+                RetryDecision(attempt, result.status_code, "delay_budget_exhausted", None)
+            )
+            break
+
         decisions.append(RetryDecision(attempt, result.status_code, "retry", delay))
+        scheduled_delay_seconds += delay
 
     return decisions
