@@ -24,12 +24,43 @@ class Constraints:
     require_outdoor: bool = False
 
 
+@dataclass(frozen=True)
+class QualificationEvidence:
+    requirement: str
+    catalog_field: str
+    observed_value: str
+
+
+@dataclass(frozen=True)
+class DiscoveryResult:
+    product: Product
+    evidence: tuple[QualificationEvidence, ...]
+
+
+def _qualification_evidence(
+    product: Product, constraints: Constraints
+) -> tuple[QualificationEvidence, ...]:
+    evidence = [
+        QualificationEvidence("category", "category", product.category),
+        QualificationEvidence(
+            "minimum_load_kg", "max_load_kg", str(product.max_load_kg)
+        ),
+    ]
+    if constraints.require_outdoor:
+        evidence.append(
+            QualificationEvidence(
+                "outdoor_use", "indoor_only", str(product.indoor_only).lower()
+            )
+        )
+    return tuple(evidence)
+
+
 def discover(
     catalog: dict[str, Product],
     candidates: Iterable[Candidate],
     constraints: Constraints,
-) -> list[Product]:
-    """Hydrate retrieval candidates from the authoritative catalog, then apply hard constraints."""
+) -> list[DiscoveryResult]:
+    """Return eligible catalog products with evidence for each applied requirement."""
     eligible: list[tuple[float, Product]] = []
 
     for candidate in candidates:
@@ -45,4 +76,7 @@ def discover(
         eligible.append((candidate.semantic_score, product))
 
     eligible.sort(key=lambda item: (-item[0], item[1].product_id))
-    return [product for _, product in eligible]
+    return [
+        DiscoveryResult(product, _qualification_evidence(product, constraints))
+        for _, product in eligible
+    ]
