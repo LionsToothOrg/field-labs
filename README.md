@@ -8,7 +8,7 @@
 
 **Real engineering problems. Rebuilt from scratch. Broken on purpose. Measured honestly.**
 
-[ENTER THE LAB BENCH](#-the-lab-bench) · [READ THE METHOD](#-the-method) · [OPEN ACTIVE EXPERIMENT](labs/01-transaction-reliability/)
+[ENTER THE LAB BENCH](#-the-lab-bench) · [READ THE METHOD](#-the-method) · [BROWSE THE CATALOG](labs/)
 
 </div>
 
@@ -52,64 +52,20 @@ A useful Field Lab has a narrow question, a reproducible baseline, an intentiona
 
 # ⌬ THE LAB BENCH
 
-| ID | Experiment | State | Signal |
-| :-- | :-- | :--: | :-- |
-| **[01](labs/01-transaction-reliability/)** | **Transaction Reliability** | 🟢 `ACTIVE` | Duplicate requests + concurrency + idempotency |
-| **02** | **AI Workflow Boundaries** | 🟣 `QUEUED` | Deterministic software ↔ AI interpretation |
-| **03** | **Email Delivery & Verification** | 🟠 `QUEUED` | Generated ≠ delivered |
-| **04** | **Web Session Reliability** | 🔵 `PLANNED` | Concurrent refresh + authentication state |
-| **05** | **Document Annotation** | 🟣 `PLANNED` | Persistent comments through changing views |
-| **06** | **Verified Document Pipeline** | 🟡 `PLANNED` | Generation + automated verification |
-| **07** | **Offline Event Check-In** | 🔵 `PLANNED` | Offline acceptance + eventual reconciliation |
-| **08** | **AI Product Discovery** | 🟣 `PLANNED` | Semantic retrieval without invented specs |
+All eight current labs have implemented slices. Their individual READMEs define the evidence, scope, and limitations for each experiment.
 
-<details open>
-<summary><strong>🟢 LAB 01 // TRANSACTION RELIABILITY // ACTIVE</strong></summary>
-<br>
+| ID | Experiment | Engineering focus |
+| :-- | :-- | :-- |
+| **[01](labs/01-transaction-reliability/)** | **Transaction Reliability** | Duplicate requests, concurrency, and idempotency |
+| **[02](labs/02-ai-workflow-boundaries/)** | **AI Workflow Boundaries** | Deterministic software and bounded AI interpretation |
+| **[03](labs/03-email-delivery-verification/)** | **Email Delivery & Verification** | Generation, provider acceptance, and delivery evidence |
+| **[04](labs/04-web-session-reliability/)** | **Web Session Reliability** | Concurrent refresh and authentication state |
+| **[05](labs/05-document-annotation/)** | **Document Annotation** | Keeping annotations anchored through changing views |
+| **[06](labs/06-verified-document-pipeline/)** | **Verified Document Pipeline** | Verifying generated document data and serialized artifacts |
+| **[07](labs/07-offline-event-check-in/)** | **Offline Event Check-In** | Offline acceptance, reconciliation, and idempotent replay |
+| **[08](labs/08-ai-product-discovery/)** | **AI Product Discovery** | Semantic retrieval bounded by authoritative catalog facts |
 
-### The duplicate transaction
-
-<img src="assets/lab-01-race.svg" alt="Two synthetic workers racing through duplicate checks toward one state mutation." width="100%">
-
-**Current experiment:** reproduce the duplicate-request race deterministically, enforce the idempotency invariant, and prove the changed behavior with automated tests.
-
-**Boundary:** the first implementation demonstrates in-process coordination. It is intentionally not presented as distributed, crash-safe idempotency.
-
-[**ENTER LAB 01 →**](labs/01-transaction-reliability/)
-
-</details>
-
-<details>
-<summary><strong>🟣 LAB 02 // AI WORKFLOW BOUNDARIES // QUEUED</strong></summary>
-<br>
-
-Where should deterministic software stop and AI interpretation begin? Planned experiments explore structured constraints, retrieval, grounding, conflicting source material, and explicit failure boundaries.
-
-</details>
-
-<details>
-<summary><strong>🟠 LAB 03 // EMAIL DELIVERY & VERIFICATION // QUEUED</strong></summary>
-<br>
-
-An application says the verification email was sent. The user never receives it. The experiment follows the message through application state, provider acceptance, authentication, suppression, bounce, deferral, and delivery evidence.
-
-</details>
-
-<details>
-<summary><strong>▸ Show remaining planned experiments</strong></summary>
-<br>
-
-**04 // Web Session Reliability** — concurrent refresh, token rotation, multi-tab behavior, and the difference between authentication bugs and apparent random logout.
-
-**05 // Document Annotation** — keeping comments anchored to the right content through zoom, resize, navigation, persistence, and revision.
-
-**06 // Verified Document Pipeline** — generating documents is easy; proving every generated document contains the right data is the experiment.
-
-**07 // Offline Event Check-In** — two disconnected devices accept the same synthetic credential, reconnect, and have to reconcile reality.
-
-**08 // AI Product Discovery** — semantic discovery over an authoritative synthetic catalog while deterministic constraints prevent invented specifications.
-
-</details>
+[**BROWSE THE FULL LAB CATALOG →**](labs/)
 
 ---
 
