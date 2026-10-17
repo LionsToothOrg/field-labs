@@ -4,10 +4,11 @@ from discovery import Candidate, Constraints, Product, QualificationEvidence, di
 
 
 CATALOG = {
-    "fixture-a": Product("fixture-a", "Northwind Stand", "stand", 12, False),
-    "fixture-b": Product("fixture-b", "Cedar Stand", "stand", 6, False),
-    "fixture-c": Product("fixture-c", "Studio Stand", "stand", 18, True),
-    "fixture-d": Product("fixture-d", "Northwind Case", "case", 20, False),
+    "fixture-a": Product("fixture-a", "Northwind Stand", "stand", 12, False, 4),
+    "fixture-b": Product("fixture-b", "Cedar Stand", "stand", 6, False, 8),
+    "fixture-c": Product("fixture-c", "Studio Stand", "stand", 18, True, 3),
+    "fixture-d": Product("fixture-d", "Northwind Case", "case", 20, False, 5),
+    "fixture-e": Product("fixture-e", "Harbor Stand", "stand", 16, False, 0),
 }
 
 
@@ -51,11 +52,39 @@ class DiscoveryTests(unittest.TestCase):
 
         self.assertEqual([], result)
 
+    def test_in_stock_requirement_excludes_unavailable_product(self):
+        candidates = [Candidate("fixture-e", 0.99), Candidate("fixture-a", 0.70)]
+
+        result = discover(
+            CATALOG,
+            candidates,
+            Constraints("stand", minimum_load_kg=10, require_in_stock=True),
+        )
+
+        self.assertEqual(["fixture-a"], [item.product.product_id for item in result])
+
+    def test_inventory_is_not_filtered_when_requirement_is_not_applied(self):
+        result = discover(
+            CATALOG,
+            [Candidate("fixture-e", 0.99), Candidate("fixture-a", 0.70)],
+            Constraints("stand", minimum_load_kg=10),
+        )
+
+        self.assertEqual(
+            ["fixture-e", "fixture-a"],
+            [item.product.product_id for item in result],
+        )
+
     def test_explanation_evidence_is_derived_from_authoritative_catalog_fields(self):
         result = discover(
             CATALOG,
             [Candidate("fixture-a", 0.81)],
-            Constraints("stand", minimum_load_kg=10, require_outdoor=True),
+            Constraints(
+                "stand",
+                minimum_load_kg=10,
+                require_outdoor=True,
+                require_in_stock=True,
+            ),
         )
 
         self.assertEqual(
@@ -63,6 +92,7 @@ class DiscoveryTests(unittest.TestCase):
                 QualificationEvidence("category", "category", "stand"),
                 QualificationEvidence("minimum_load_kg", "max_load_kg", "12"),
                 QualificationEvidence("outdoor_use", "indoor_only", "false"),
+                QualificationEvidence("in_stock", "stock_count", "4"),
             ),
             result[0].evidence,
         )
