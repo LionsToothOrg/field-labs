@@ -52,7 +52,7 @@ A useful Field Lab has a narrow question, a reproducible baseline, an intentiona
 
 # ⌬ THE LAB BENCH
 
-All nine current labs have implemented slices. Their individual READMEs define the evidence, scope, and limitations for each experiment.
+All ten current labs have implemented slices. Their individual READMEs define the evidence, scope, and limitations for each experiment.
 
 | ID | Experiment | Engineering focus |
 | :-- | :-- | :-- |
@@ -65,6 +65,7 @@ All nine current labs have implemented slices. Their individual READMEs define t
 | **[07](labs/07-offline-event-check-in/)** | **Offline Event Check-In** | Offline acceptance, reconciliation, and idempotent replay |
 | **[08](labs/08-ai-product-discovery/)** | **AI Product Discovery** | Semantic retrieval bounded by authoritative catalog facts |
 | **[09](labs/09-bounded-api-retries/)** | **Bounded API Retries** | Retry classification, replay safety, backoff, and bounded retry budgets |
+| **[10](labs/10-circuit-breaker-recovery/)** | **Circuit Breaker Recovery** | Failure isolation, recovery timeout, and bounded probe admission |
 
 [**BROWSE THE FULL LAB CATALOG →**](labs/)
 
