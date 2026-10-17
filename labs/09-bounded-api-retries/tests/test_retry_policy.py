@@ -68,6 +68,39 @@ class RetryPolicyTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "retry_after_seconds"):
             plan_retries([AttemptResult(429, retry_after_seconds=-1)])
 
+    def test_non_idempotent_operation_does_not_replay_transient_failure(self):
+        result = plan_retries(
+            [AttemptResult(503), AttemptResult(200)],
+            operation_is_idempotent=False,
+        )
+
+        self.assertEqual(
+            [RetryDecision(1, 503, "unsafe_to_retry", None)],
+            result,
+        )
+
+    def test_non_idempotent_operation_can_succeed_on_first_attempt(self):
+        result = plan_retries(
+            [AttemptResult(201)],
+            operation_is_idempotent=False,
+        )
+
+        self.assertEqual([RetryDecision(1, 201, "succeed", None)], result)
+
+    def test_idempotent_operation_retains_transient_retry_behavior(self):
+        result = plan_retries(
+            [AttemptResult(503), AttemptResult(200)],
+            operation_is_idempotent=True,
+        )
+
+        self.assertEqual(
+            [
+                RetryDecision(1, 503, "retry", 1),
+                RetryDecision(2, 200, "succeed", None),
+            ],
+            result,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

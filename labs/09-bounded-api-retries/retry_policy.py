@@ -29,6 +29,7 @@ def plan_retries(
     max_attempts: int = 4,
     base_delay_seconds: int = 1,
     max_delay_seconds: int = 30,
+    operation_is_idempotent: bool = True,
 ) -> list[RetryDecision]:
     """Build deterministic retry decisions from a synthetic sequence of responses."""
     if max_attempts < 1:
@@ -48,6 +49,12 @@ def plan_retries(
 
         if result.status_code not in RETRYABLE_STATUS_CODES:
             decisions.append(RetryDecision(attempt, result.status_code, "stop", None))
+            break
+
+        if not operation_is_idempotent:
+            decisions.append(
+                RetryDecision(attempt, result.status_code, "unsafe_to_retry", None)
+            )
             break
 
         if attempt == max_attempts:
