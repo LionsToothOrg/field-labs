@@ -17,8 +17,13 @@ class Bulkhead:
     def __init__(self, capacities: dict[str, int]):
         if not capacities:
             raise ValueError("at least one partition is required")
-        if any(not name or capacity <= 0 for name, capacity in capacities.items()):
-            raise ValueError("partition names must be non-empty and capacities must be positive")
+        if any(
+            not isinstance(name, str) or not name or not self._is_positive_int(capacity)
+            for name, capacity in capacities.items()
+        ):
+            raise ValueError(
+                "partition names must be non-empty strings and capacities must be positive integers"
+            )
 
         self._capacities = dict(capacities)
         self._in_flight = {name: 0 for name in capacities}
@@ -63,6 +68,10 @@ class Bulkhead:
             raise KeyError(f"unknown partition: {partition}")
 
     @staticmethod
-    def _require_permits(permits: int) -> None:
-        if permits <= 0:
-            raise ValueError("permits must be positive")
+    def _is_positive_int(value: object) -> bool:
+        return isinstance(value, int) and not isinstance(value, bool) and value > 0
+
+    @classmethod
+    def _require_permits(cls, permits: int) -> None:
+        if not cls._is_positive_int(permits):
+            raise ValueError("permits must be a positive integer")
