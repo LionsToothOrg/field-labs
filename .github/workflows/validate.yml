@@ -56,6 +56,9 @@ jobs:
       - name: Run circuit breaker recovery tests
         run: PYTHONPATH=labs/10-circuit-breaker-recovery python -m unittest discover -s labs/10-circuit-breaker-recovery/tests -v
 
+      - name: Run bulkhead isolation tests
+        run: PYTHONPATH=labs/11-bulkhead-isolation python -m unittest discover -s labs/11-bulkhead-isolation/tests -v
+
       - name: Validate interactive lab bench JavaScript
         run: node --check site/app.js
 
