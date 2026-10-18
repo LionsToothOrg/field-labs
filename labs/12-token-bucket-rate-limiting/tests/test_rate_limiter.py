@@ -9,6 +9,7 @@ class TokenBucketTests(unittest.TestCase):
         decision = bucket.allow(now=0, tokens=2)
         self.assertTrue(decision.allowed)
         self.assertEqual(decision.reason, "allowed")
+        self.assertEqual(decision.retry_after, 0.0)
         self.assertEqual(bucket.snapshot(), (1.0, 3.0, 0.0))
 
     def test_rejects_request_when_tokens_are_exhausted(self):
@@ -17,7 +18,33 @@ class TokenBucketTests(unittest.TestCase):
         decision = bucket.allow(now=0, tokens=1)
         self.assertFalse(decision.allowed)
         self.assertEqual(decision.reason, "insufficient_tokens")
+        self.assertEqual(decision.retry_after, 1.0)
         self.assertEqual(bucket.snapshot(), (0.0, 2.0, 0.0))
+
+    def test_retry_after_reflects_weighted_token_deficit(self):
+        bucket = TokenBucket(capacity=5, refill_rate=2)
+        bucket.allow(now=0, tokens=4)
+        decision = bucket.allow(now=0, tokens=3)
+        self.assertFalse(decision.allowed)
+        self.assertEqual(decision.retry_after, 1.0)
+        self.assertEqual(bucket.snapshot(), (1.0, 5.0, 0.0))
+
+    def test_retry_after_request_succeeds_when_deficit_has_refilled(self):
+        bucket = TokenBucket(capacity=3, refill_rate=2)
+        bucket.allow(now=0, tokens=3)
+        rejected = bucket.allow(now=0, tokens=1)
+        admitted = bucket.allow(now=rejected.retry_after, tokens=1)
+        self.assertTrue(admitted.allowed)
+        self.assertEqual(admitted.retry_after, 0.0)
+
+    def test_request_larger_than_capacity_is_not_retryable(self):
+        bucket = TokenBucket(capacity=3, refill_rate=2)
+        before = bucket.snapshot()
+        decision = bucket.allow(now=0, tokens=4)
+        self.assertFalse(decision.allowed)
+        self.assertEqual(decision.reason, "request_exceeds_capacity")
+        self.assertIsNone(decision.retry_after)
+        self.assertEqual(bucket.snapshot(), before)
 
     def test_refills_from_elapsed_time(self):
         bucket = TokenBucket(capacity=4, refill_rate=2)
