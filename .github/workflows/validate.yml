@@ -62,6 +62,9 @@ jobs:
       - name: Run token bucket rate limiting tests
         run: PYTHONPATH=labs/12-token-bucket-rate-limiting python -m unittest discover -s labs/12-token-bucket-rate-limiting/tests -v
 
+      - name: Run request deadline budgeting tests
+        run: PYTHONPATH=labs/13-request-deadline-budgeting python -m unittest discover -s labs/13-request-deadline-budgeting/tests -v
+
       - name: Validate interactive lab bench JavaScript
         run: node --check site/app.js
 
