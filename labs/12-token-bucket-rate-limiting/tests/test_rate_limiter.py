@@ -27,6 +27,30 @@ class TokenBucketTests(unittest.TestCase):
         admitted = bucket.allow(now=4.5, tokens=1)
         self.assertTrue(admitted.allowed)
 
+    def test_inspect_projects_refill_without_mutating_state(self):
+        bucket = TokenBucket(capacity=5, refill_rate=2, initial_tokens=1)
+        before = bucket.snapshot()
+        state = bucket.inspect(now=1.5)
+        self.assertEqual((state.tokens, state.capacity, state.as_of), (4.0, 5.0, 1.5))
+        self.assertEqual(bucket.snapshot(), before)
+
+        decision = bucket.allow(now=1.5, tokens=4)
+        self.assertTrue(decision.allowed)
+        self.assertEqual(bucket.snapshot(), (0.0, 5.0, 1.5))
+
+    def test_inspect_caps_projection_at_capacity(self):
+        bucket = TokenBucket(capacity=3, refill_rate=2, initial_tokens=1)
+        state = bucket.inspect(now=10)
+        self.assertEqual(state.tokens, 3.0)
+        self.assertEqual(bucket.snapshot(), (1.0, 3.0, 0.0))
+
+    def test_inspect_rejects_clock_regression_without_mutating_state(self):
+        bucket = TokenBucket(capacity=3, refill_rate=1, start_time=5)
+        before = bucket.snapshot()
+        with self.assertRaisesRegex(ValueError, "backward"):
+            bucket.inspect(now=4.5)
+        self.assertEqual(bucket.snapshot(), before)
+
     def test_rejects_request_when_tokens_are_exhausted(self):
         bucket = TokenBucket(capacity=2, refill_rate=1)
         bucket.allow(now=0, tokens=2)

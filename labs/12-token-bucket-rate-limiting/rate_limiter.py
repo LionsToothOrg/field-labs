@@ -12,6 +12,13 @@ class Decision:
     retry_after: float | None
 
 
+@dataclass(frozen=True)
+class BucketState:
+    tokens: float
+    capacity: float
+    as_of: float
+
+
 class TokenBucket:
     def __init__(
         self,
@@ -78,6 +85,19 @@ class TokenBucket:
             "allowed",
             0.0,
         )
+
+    def inspect(self, now: float) -> BucketState:
+        self._require_time(now)
+        now = float(now)
+        if now < self._last_updated:
+            raise ValueError("now cannot move backward")
+
+        elapsed = now - self._last_updated
+        projected_tokens = min(
+            self._capacity,
+            self._tokens + elapsed * self._refill_rate,
+        )
+        return BucketState(projected_tokens, self._capacity, now)
 
     def snapshot(self) -> tuple[float, float, float]:
         return (self._tokens, self._capacity, self._last_updated)
