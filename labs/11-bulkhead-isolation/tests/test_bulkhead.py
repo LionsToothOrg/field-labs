@@ -80,13 +80,20 @@ class BulkheadTests(unittest.TestCase):
             bulkhead.release("exports", permits=3)
         self.assertEqual(bulkhead.snapshot()["exports"], (2, 4))
 
-    def test_rejects_non_positive_permits(self):
+    def test_rejects_invalid_permit_types_without_mutating_capacity(self):
         bulkhead = Bulkhead({"search": 2})
-        for permits in (0, -1):
+        for permits in (0, -1, 1.5, True, "1"):
             with self.subTest(permits=permits), self.assertRaises(ValueError):
                 bulkhead.admit("search", permits=permits)
+            self.assertEqual(bulkhead.snapshot()["search"], (0, 2))
+
+    def test_rejects_invalid_release_permit_types_without_mutating_capacity(self):
+        bulkhead = Bulkhead({"search": 2})
+        bulkhead.admit("search")
+        for permits in (0, -1, 1.5, True, "1"):
             with self.subTest(permits=permits), self.assertRaises(ValueError):
                 bulkhead.release("search", permits=permits)
+            self.assertEqual(bulkhead.snapshot()["search"], (1, 2))
 
     def test_rejects_unknown_partition(self):
         bulkhead = Bulkhead({"search": 1})
@@ -96,7 +103,17 @@ class BulkheadTests(unittest.TestCase):
             bulkhead.release("missing")
 
     def test_rejects_invalid_configuration(self):
-        for capacities in ({}, {"": 1}, {"search": 0}, {"search": -1}):
+        invalid_capacities = (
+            {},
+            {"": 1},
+            {1: 1},
+            {"search": 0},
+            {"search": -1},
+            {"search": 1.5},
+            {"search": True},
+            {"search": "2"},
+        )
+        for capacities in invalid_capacities:
             with self.subTest(capacities=capacities), self.assertRaises(ValueError):
                 Bulkhead(capacities)
 
