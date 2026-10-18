@@ -25,23 +25,24 @@ PYTHONPATH=labs/11-bulkhead-isolation \
   python -m unittest discover -s labs/11-bulkhead-isolation/tests -v
 ```
 
-The tests exercise saturation rejection, cross-partition isolation, capacity restoration, invalid releases, unknown partitions, invalid configuration, and inspectable partition state.
+The tests exercise saturation rejection, cross-partition isolation, capacity restoration, scoped automatic release, exception cleanup, invalid releases, unknown partitions, invalid configuration, and inspectable partition state.
 
 ## Design choices
 
 - **Independent partitions:** each named workload receives a separate concurrency budget.
 - **Fail-fast saturation:** this slice rejects excess work instead of building an unbounded queue.
-- **Explicit release:** callers return capacity after admitted work finishes.
+- **Explicit release:** callers can return capacity after admitted work finishes.
+- **Scoped admission:** the `admission()` context manager automatically returns capacity for admitted work, including when the caller raises an exception. A rejected scoped admission never releases capacity owned by existing work.
 - **Defensive accounting:** releasing capacity that was never admitted raises an error instead of silently producing a negative count.
 - **Inspectable decisions:** admission results include the partition, current in-flight count, capacity, and reason.
 - **No transport coupling:** the policy does not know about HTTP, workers, threads, or a particular dependency client.
 
 ## What this slice demonstrates
 
-The implementation demonstrates bounded per-partition admission and verifies that saturating one synthetic workload does not prevent admission to another partition with available capacity.
+The implementation demonstrates bounded per-partition admission, verifies that saturating one synthetic workload does not prevent admission to another partition with available capacity, and provides a scoped path that avoids leaking capacity when admitted work exits unexpectedly.
 
 ## Limitations
 
-This is not a production concurrency limiter. It does not yet provide thread/process synchronization, distributed coordination, weighted work, queues, fairness, priorities, cancellation, timeouts, lease ownership, automatic release, metrics, or dynamic capacity changes.
+This is not a production concurrency limiter. It does not yet provide thread/process synchronization, distributed coordination, weighted work, queues, fairness, priorities, cancellation, timeouts, lease ownership, metrics, or dynamic capacity changes.
 
-The counters demonstrate the isolation policy boundary in one in-memory process. No claim is made about production throughput, latency, or overload prevention.
+The counters demonstrate the isolation policy boundary in one in-memory process. The scoped helper reduces release mistakes within that model, but it does not make the implementation safe for concurrent threads or processes. No claim is made about production throughput, latency, or overload prevention.

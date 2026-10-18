@@ -1,4 +1,6 @@
+from contextlib import contextmanager
 from dataclasses import dataclass
+from typing import Iterator
 
 
 @dataclass(frozen=True)
@@ -37,6 +39,15 @@ class Bulkhead:
         if self._in_flight[partition] == 0:
             raise RuntimeError("cannot release a partition with no admitted work")
         self._in_flight[partition] -= 1
+
+    @contextmanager
+    def admission(self, partition: str) -> Iterator[Admission]:
+        decision = self.admit(partition)
+        try:
+            yield decision
+        finally:
+            if decision.allowed:
+                self.release(partition)
 
     def snapshot(self) -> dict[str, tuple[int, int]]:
         return {
