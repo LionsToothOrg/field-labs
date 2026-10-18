@@ -99,6 +99,42 @@ class TokenBucket:
         )
         return BucketState(projected_tokens, self._capacity, now)
 
+    def preview(self, now: float, tokens: float = 1.0) -> Decision:
+        """Project an admission decision without reserving or mutating capacity."""
+        self._require_positive_number(tokens, "tokens")
+        state = self.inspect(now)
+        requested = float(tokens)
+
+        if requested > self._capacity:
+            return Decision(
+                False,
+                requested,
+                state.tokens,
+                self._capacity,
+                "request_exceeds_capacity",
+                None,
+            )
+
+        if requested > state.tokens:
+            retry_after = (requested - state.tokens) / self._refill_rate
+            return Decision(
+                False,
+                requested,
+                state.tokens,
+                self._capacity,
+                "insufficient_tokens",
+                retry_after,
+            )
+
+        return Decision(
+            True,
+            requested,
+            state.tokens - requested,
+            self._capacity,
+            "allowed",
+            0.0,
+        )
+
     def snapshot(self) -> tuple[float, float, float]:
         return (self._tokens, self._capacity, self._last_updated)
 
