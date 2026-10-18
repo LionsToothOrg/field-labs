@@ -1,0 +1,62 @@
+import unittest
+
+from bulkhead import Bulkhead
+
+
+class BulkheadTests(unittest.TestCase):
+    def test_rejects_work_when_partition_is_saturated(self):
+        bulkhead = Bulkhead({"search": 2})
+        self.assertTrue(bulkhead.admit("search").allowed)
+        self.assertTrue(bulkhead.admit("search").allowed)
+
+        decision = bulkhead.admit("search")
+
+        self.assertFalse(decision.allowed)
+        self.assertEqual(decision.reason, "partition_saturated")
+        self.assertEqual((decision.in_flight, decision.capacity), (2, 2))
+
+    def test_saturation_is_isolated_between_partitions(self):
+        bulkhead = Bulkhead({"search": 1, "exports": 1})
+        bulkhead.admit("search")
+
+        self.assertFalse(bulkhead.admit("search").allowed)
+        self.assertTrue(bulkhead.admit("exports").allowed)
+
+    def test_release_restores_capacity(self):
+        bulkhead = Bulkhead({"search": 1})
+        bulkhead.admit("search")
+        bulkhead.release("search")
+
+        self.assertTrue(bulkhead.admit("search").allowed)
+
+    def test_rejects_release_without_admitted_work(self):
+        bulkhead = Bulkhead({"search": 1})
+
+        with self.assertRaises(RuntimeError):
+            bulkhead.release("search")
+
+    def test_rejects_unknown_partition(self):
+        bulkhead = Bulkhead({"search": 1})
+
+        with self.assertRaises(KeyError):
+            bulkhead.admit("missing")
+        with self.assertRaises(KeyError):
+            bulkhead.release("missing")
+
+    def test_rejects_invalid_configuration(self):
+        for capacities in ({}, {"": 1}, {"search": 0}, {"search": -1}):
+            with self.subTest(capacities=capacities), self.assertRaises(ValueError):
+                Bulkhead(capacities)
+
+    def test_snapshot_reports_each_partition_independently(self):
+        bulkhead = Bulkhead({"search": 2, "exports": 1})
+        bulkhead.admit("search")
+
+        self.assertEqual(
+            bulkhead.snapshot(),
+            {"search": (1, 2), "exports": (0, 1)},
+        )
+
+
+if __name__ == "__main__":
+    unittest.main()

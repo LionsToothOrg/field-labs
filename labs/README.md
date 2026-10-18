@@ -14,6 +14,7 @@ This directory is the current index of implemented Field Labs. Each lab is a sel
 | [08](08-ai-product-discovery/) | AI Product Discovery | Semantic retrieval bounded by authoritative catalog facts |
 | [09](09-bounded-api-retries/) | Bounded API Retries | Transient failure classification, backoff, and retry exhaustion |
 | [10](10-circuit-breaker-recovery/) | Circuit Breaker Recovery | Failure isolation, recovery timeout, and bounded probe admission |
+| [11](11-bulkhead-isolation/) | Bulkhead Isolation | Partitioned concurrency limits and saturation containment |
 
 ## Reading the labs
 
