@@ -59,6 +59,9 @@ jobs:
       - name: Run bulkhead isolation tests
         run: PYTHONPATH=labs/11-bulkhead-isolation python -m unittest discover -s labs/11-bulkhead-isolation/tests -v
 
+      - name: Run token bucket rate limiting tests
+        run: PYTHONPATH=labs/12-token-bucket-rate-limiting python -m unittest discover -s labs/12-token-bucket-rate-limiting/tests -v
+
       - name: Validate interactive lab bench JavaScript
         run: node --check site/app.js
 
