@@ -9,6 +9,7 @@ class Decision:
     remaining: float
     capacity: float
     reason: str
+    retry_after: float | None
 
 
 class TokenBucket:
@@ -37,13 +38,25 @@ class TokenBucket:
         )
         self._last_updated = now
 
+        if requested > self._capacity:
+            return Decision(
+                False,
+                requested,
+                self._tokens,
+                self._capacity,
+                "request_exceeds_capacity",
+                None,
+            )
+
         if requested > self._tokens:
+            retry_after = (requested - self._tokens) / self._refill_rate
             return Decision(
                 False,
                 requested,
                 self._tokens,
                 self._capacity,
                 "insufficient_tokens",
+                retry_after,
             )
 
         self._tokens -= requested
@@ -53,6 +66,7 @@ class TokenBucket:
             self._tokens,
             self._capacity,
             "allowed",
+            0.0,
         )
 
     def snapshot(self) -> tuple[float, float, float]:
