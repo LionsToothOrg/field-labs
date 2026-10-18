@@ -7,6 +7,7 @@ from typing import Iterator
 class Admission:
     allowed: bool
     partition: str
+    permits: int
     in_flight: int
     capacity: int
     reason: str
@@ -22,32 +23,34 @@ class Bulkhead:
         self._capacities = dict(capacities)
         self._in_flight = {name: 0 for name in capacities}
 
-    def admit(self, partition: str) -> Admission:
+    def admit(self, partition: str, permits: int = 1) -> Admission:
         self._require_partition(partition)
+        self._require_permits(permits)
         capacity = self._capacities[partition]
         current = self._in_flight[partition]
 
-        if current >= capacity:
-            return Admission(False, partition, current, capacity, "partition_saturated")
+        if current + permits > capacity:
+            return Admission(False, partition, permits, current, capacity, "partition_saturated")
 
-        current += 1
+        current += permits
         self._in_flight[partition] = current
-        return Admission(True, partition, current, capacity, "admitted")
+        return Admission(True, partition, permits, current, capacity, "admitted")
 
-    def release(self, partition: str) -> None:
+    def release(self, partition: str, permits: int = 1) -> None:
         self._require_partition(partition)
-        if self._in_flight[partition] == 0:
-            raise RuntimeError("cannot release a partition with no admitted work")
-        self._in_flight[partition] -= 1
+        self._require_permits(permits)
+        if permits > self._in_flight[partition]:
+            raise RuntimeError("cannot release more permits than admitted")
+        self._in_flight[partition] -= permits
 
     @contextmanager
-    def admission(self, partition: str) -> Iterator[Admission]:
-        decision = self.admit(partition)
+    def admission(self, partition: str, permits: int = 1) -> Iterator[Admission]:
+        decision = self.admit(partition, permits)
         try:
             yield decision
         finally:
             if decision.allowed:
-                self.release(partition)
+                self.release(partition, permits)
 
     def snapshot(self) -> dict[str, tuple[int, int]]:
         return {
@@ -58,3 +61,8 @@ class Bulkhead:
     def _require_partition(self, partition: str) -> None:
         if partition not in self._capacities:
             raise KeyError(f"unknown partition: {partition}")
+
+    @staticmethod
+    def _require_permits(permits: int) -> None:
+        if permits <= 0:
+            raise ValueError("permits must be positive")
