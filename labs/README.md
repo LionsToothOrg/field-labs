@@ -15,6 +15,7 @@ This directory is the current index of implemented Field Labs. Each lab is a sel
 | [09](09-bounded-api-retries/) | Bounded API Retries | Transient failure classification, backoff, and retry exhaustion |
 | [10](10-circuit-breaker-recovery/) | Circuit Breaker Recovery | Failure isolation, recovery timeout, and bounded probe admission |
 | [11](11-bulkhead-isolation/) | Bulkhead Isolation | Partitioned concurrency limits and saturation containment |
+| [12](12-token-bucket-rate-limiting/) | Token Bucket Rate Limiting | Burst admission, refill accounting, and bounded request rates |
 
 ## Reading the labs
 
