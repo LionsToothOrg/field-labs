@@ -89,6 +89,17 @@ class CircuitBreakerTests(unittest.TestCase):
         self.assertFalse(breaker.before_call(now=25).allowed)
         self.assertTrue(breaker.before_call(now=26).allowed)
 
+    def test_rejects_clock_regression_for_failed_probe(self):
+        breaker = CircuitBreaker(failure_threshold=1, recovery_timeout_seconds=10)
+        breaker.record_failure(now=5)
+        breaker.before_call(now=20)
+
+        with self.assertRaisesRegex(ValueError, "half-open probe"):
+            breaker.record_failure(now=19)
+
+        self.assertEqual(breaker.state, CircuitState.HALF_OPEN)
+        self.assertFalse(breaker.before_call(now=20).allowed)
+
     def test_rejects_invalid_configuration(self):
         with self.assertRaises(ValueError):
             CircuitBreaker(failure_threshold=0, recovery_timeout_seconds=1)
