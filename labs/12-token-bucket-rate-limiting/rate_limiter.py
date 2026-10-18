@@ -55,36 +55,10 @@ class TokenBucket:
         )
         self._last_updated = now
 
-        if requested > self._capacity:
-            return Decision(
-                False,
-                requested,
-                self._tokens,
-                self._capacity,
-                "request_exceeds_capacity",
-                None,
-            )
-
-        if requested > self._tokens:
-            retry_after = (requested - self._tokens) / self._refill_rate
-            return Decision(
-                False,
-                requested,
-                self._tokens,
-                self._capacity,
-                "insufficient_tokens",
-                retry_after,
-            )
-
-        self._tokens -= requested
-        return Decision(
-            True,
-            requested,
-            self._tokens,
-            self._capacity,
-            "allowed",
-            0.0,
-        )
+        decision = self._decision_for(self._tokens, requested)
+        if decision.allowed:
+            self._tokens = decision.remaining
+        return decision
 
     def inspect(self, now: float) -> BucketState:
         self._require_time(now)
@@ -103,24 +77,28 @@ class TokenBucket:
         """Project an admission decision without reserving or mutating capacity."""
         self._require_positive_number(tokens, "tokens")
         state = self.inspect(now)
-        requested = float(tokens)
+        return self._decision_for(state.tokens, float(tokens))
 
+    def snapshot(self) -> tuple[float, float, float]:
+        return (self._tokens, self._capacity, self._last_updated)
+
+    def _decision_for(self, available: float, requested: float) -> Decision:
         if requested > self._capacity:
             return Decision(
                 False,
                 requested,
-                state.tokens,
+                available,
                 self._capacity,
                 "request_exceeds_capacity",
                 None,
             )
 
-        if requested > state.tokens:
-            retry_after = (requested - state.tokens) / self._refill_rate
+        if requested > available:
+            retry_after = (requested - available) / self._refill_rate
             return Decision(
                 False,
                 requested,
-                state.tokens,
+                available,
                 self._capacity,
                 "insufficient_tokens",
                 retry_after,
@@ -129,14 +107,11 @@ class TokenBucket:
         return Decision(
             True,
             requested,
-            state.tokens - requested,
+            available - requested,
             self._capacity,
             "allowed",
             0.0,
         )
-
-    def snapshot(self) -> tuple[float, float, float]:
-        return (self._tokens, self._capacity, self._last_updated)
 
     @staticmethod
     def _is_finite_number(value: object) -> bool:
