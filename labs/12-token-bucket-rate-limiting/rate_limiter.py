@@ -13,13 +13,23 @@ class Decision:
 
 
 class TokenBucket:
-    def __init__(self, capacity: float, refill_rate: float, start_time: float = 0.0):
+    def __init__(
+        self,
+        capacity: float,
+        refill_rate: float,
+        start_time: float = 0.0,
+        initial_tokens: float | None = None,
+    ):
         self._require_positive_number(capacity, "capacity")
         self._require_positive_number(refill_rate, "refill_rate")
         self._require_time(start_time)
+        if initial_tokens is not None:
+            self._require_non_negative_number(initial_tokens, "initial_tokens")
+            if initial_tokens > capacity:
+                raise ValueError("initial_tokens cannot exceed capacity")
         self._capacity = float(capacity)
         self._refill_rate = float(refill_rate)
-        self._tokens = float(capacity)
+        self._tokens = self._capacity if initial_tokens is None else float(initial_tokens)
         self._last_updated = float(start_time)
 
     def allow(self, now: float, tokens: float = 1.0) -> Decision:
@@ -84,6 +94,11 @@ class TokenBucket:
     def _require_positive_number(cls, value: object, name: str) -> None:
         if not cls._is_finite_number(value) or value <= 0:
             raise ValueError(f"{name} must be a positive finite number")
+
+    @classmethod
+    def _require_non_negative_number(cls, value: object, name: str) -> None:
+        if not cls._is_finite_number(value) or value < 0:
+            raise ValueError(f"{name} must be a non-negative finite number")
 
     @classmethod
     def _require_time(cls, value: object) -> None:

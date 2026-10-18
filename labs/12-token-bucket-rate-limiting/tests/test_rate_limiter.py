@@ -12,6 +12,21 @@ class TokenBucketTests(unittest.TestCase):
         self.assertEqual(decision.retry_after, 0.0)
         self.assertEqual(bucket.snapshot(), (1.0, 3.0, 0.0))
 
+    def test_can_start_with_partial_capacity(self):
+        bucket = TokenBucket(capacity=5, refill_rate=2, start_time=10, initial_tokens=1.5)
+        self.assertEqual(bucket.snapshot(), (1.5, 5.0, 10.0))
+        decision = bucket.allow(now=10.5, tokens=2.5)
+        self.assertTrue(decision.allowed)
+        self.assertEqual(bucket.snapshot(), (0.0, 5.0, 10.5))
+
+    def test_can_start_empty_and_refill_from_start_time(self):
+        bucket = TokenBucket(capacity=3, refill_rate=2, start_time=4, initial_tokens=0)
+        rejected = bucket.allow(now=4, tokens=1)
+        self.assertFalse(rejected.allowed)
+        self.assertEqual(rejected.retry_after, 0.5)
+        admitted = bucket.allow(now=4.5, tokens=1)
+        self.assertTrue(admitted.allowed)
+
     def test_rejects_request_when_tokens_are_exhausted(self):
         bucket = TokenBucket(capacity=2, refill_rate=1)
         bucket.allow(now=0, tokens=2)
@@ -84,6 +99,11 @@ class TokenBucketTests(unittest.TestCase):
         ):
             with self.subTest(capacity=capacity, refill_rate=refill_rate), self.assertRaises(ValueError):
                 TokenBucket(capacity=capacity, refill_rate=refill_rate)
+
+    def test_rejects_invalid_initial_tokens(self):
+        for initial_tokens in (-1, True, float("inf"), float("nan"), 4):
+            with self.subTest(initial_tokens=initial_tokens), self.assertRaises(ValueError):
+                TokenBucket(capacity=3, refill_rate=1, initial_tokens=initial_tokens)
 
     def test_rejects_invalid_requests_without_mutating_state(self):
         bucket = TokenBucket(capacity=3, refill_rate=1)
