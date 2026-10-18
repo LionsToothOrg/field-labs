@@ -29,6 +29,34 @@ class BulkheadTests(unittest.TestCase):
 
         self.assertTrue(bulkhead.admit("search").allowed)
 
+    def test_scoped_admission_releases_capacity(self):
+        bulkhead = Bulkhead({"search": 1})
+
+        with bulkhead.admission("search") as decision:
+            self.assertTrue(decision.allowed)
+            self.assertEqual(bulkhead.snapshot()["search"], (1, 1))
+
+        self.assertEqual(bulkhead.snapshot()["search"], (0, 1))
+
+    def test_scoped_admission_releases_capacity_after_exception(self):
+        bulkhead = Bulkhead({"search": 1})
+
+        with self.assertRaisesRegex(RuntimeError, "synthetic failure"):
+            with bulkhead.admission("search") as decision:
+                self.assertTrue(decision.allowed)
+                raise RuntimeError("synthetic failure")
+
+        self.assertEqual(bulkhead.snapshot()["search"], (0, 1))
+
+    def test_rejected_scoped_admission_does_not_release_existing_work(self):
+        bulkhead = Bulkhead({"search": 1})
+        bulkhead.admit("search")
+
+        with bulkhead.admission("search") as decision:
+            self.assertFalse(decision.allowed)
+
+        self.assertEqual(bulkhead.snapshot()["search"], (1, 1))
+
     def test_rejects_release_without_admitted_work(self):
         bulkhead = Bulkhead({"search": 1})
 
