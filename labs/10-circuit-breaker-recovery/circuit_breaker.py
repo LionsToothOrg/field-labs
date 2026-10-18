@@ -37,6 +37,7 @@ class CircuitBreaker:
         self.consecutive_failures = 0
         self.opened_at: float | None = None
         self._probe_in_flight = False
+        self._probe_started_at: float | None = None
 
     def before_call(self, *, now: float) -> Decision:
         if self.state is CircuitState.OPEN:
@@ -57,6 +58,7 @@ class CircuitBreaker:
             if self._probe_in_flight:
                 return Decision(False, self.state, "probe_in_flight")
             self._probe_in_flight = True
+            self._probe_started_at = now
             return Decision(True, self.state, "probe_allowed")
 
         return Decision(True, self.state, "closed")
@@ -69,12 +71,17 @@ class CircuitBreaker:
         self.consecutive_failures = 0
         self.opened_at = None
         self._probe_in_flight = False
+        self._probe_started_at = None
 
     def record_failure(self, *, now: float) -> None:
         if self.state is CircuitState.OPEN:
             raise RuntimeError("cannot record a call outcome while the circuit is open")
 
         if self.state is CircuitState.HALF_OPEN:
+            if self._probe_started_at is None:
+                raise RuntimeError("cannot record a half-open failure without an admitted probe")
+            if now < self._probe_started_at:
+                raise ValueError("now cannot precede the half-open probe timestamp")
             self._open(now=now)
             return
 
@@ -86,3 +93,4 @@ class CircuitBreaker:
         self.state = CircuitState.OPEN
         self.opened_at = now
         self._probe_in_flight = False
+        self._probe_started_at = None
