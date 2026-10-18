@@ -46,6 +46,35 @@ class TokenBucketPreviewTests(unittest.TestCase):
                 bucket.preview(now=now, tokens=tokens)
             self.assertEqual(bucket.snapshot(), before)
 
+    def test_preview_matches_allow_decision_for_equivalent_state(self):
+        scenarios = (
+            {"capacity": 5, "refill_rate": 2, "initial_tokens": 1, "now": 1.5, "tokens": 3},
+            {"capacity": 5, "refill_rate": 2, "initial_tokens": 1, "now": 0.5, "tokens": 4},
+            {"capacity": 3, "refill_rate": 1, "initial_tokens": 3, "now": 2, "tokens": 4},
+        )
+
+        for scenario in scenarios:
+            with self.subTest(scenario=scenario):
+                preview_bucket = TokenBucket(
+                    capacity=scenario["capacity"],
+                    refill_rate=scenario["refill_rate"],
+                    initial_tokens=scenario["initial_tokens"],
+                )
+                allow_bucket = TokenBucket(
+                    capacity=scenario["capacity"],
+                    refill_rate=scenario["refill_rate"],
+                    initial_tokens=scenario["initial_tokens"],
+                )
+
+                preview = preview_bucket.preview(
+                    now=scenario["now"], tokens=scenario["tokens"]
+                )
+                admitted = allow_bucket.allow(
+                    now=scenario["now"], tokens=scenario["tokens"]
+                )
+
+                self.assertEqual(preview, admitted)
+
 
 if __name__ == "__main__":
     unittest.main()
