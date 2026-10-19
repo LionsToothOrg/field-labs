@@ -31,6 +31,17 @@ class NestedWorkResult:
     cancelled: bool
 
 
+@dataclass(frozen=True)
+class FinalizedWorkResult:
+    planned: float
+    work_elapsed: float
+    cleanup_elapsed: float
+    elapsed: float
+    completed: bool
+    cancelled: bool
+    cleanup_ran: bool
+
+
 def _require_finite_nonnegative(name: str, value: float) -> None:
     if not math.isfinite(value) or value < 0:
         raise ValueError(f"{name} must be finite and non-negative")
@@ -139,4 +150,45 @@ def simulate_nested_work(
         elapsed=elapsed,
         completed=len(results) == len(stages) and not cancelled,
         cancelled=cancelled,
+    )
+
+
+def simulate_finalized_work(
+    *,
+    planned: float,
+    cleanup_duration: float,
+    cancel_at: float,
+    check_interval: float,
+    propagate_cancellation: bool,
+) -> FinalizedWorkResult:
+    """Model cleanup that runs once after work completes or observes cancellation.
+
+    Cleanup is intentionally non-cancellable in this model so the experiment can
+    make its guarantee explicit: once admitted, finalization runs to completion.
+    """
+
+    _require_finite_nonnegative("planned", planned)
+    _require_finite_nonnegative("cleanup_duration", cleanup_duration)
+    _require_finite_nonnegative("cancel_at", cancel_at)
+    if not math.isfinite(check_interval) or check_interval <= 0:
+        raise ValueError("check_interval must be finite and greater than zero")
+
+    if not propagate_cancellation or planned <= cancel_at:
+        work_elapsed = planned
+        completed = True
+        cancelled = False
+    else:
+        observed_at = _cancellation_observed_at(cancel_at, check_interval)
+        work_elapsed = min(planned, observed_at)
+        completed = planned <= observed_at
+        cancelled = not completed
+
+    return FinalizedWorkResult(
+        planned=planned,
+        work_elapsed=work_elapsed,
+        cleanup_elapsed=cleanup_duration,
+        elapsed=work_elapsed + cleanup_duration,
+        completed=completed,
+        cancelled=cancelled,
+        cleanup_ran=True,
     )
