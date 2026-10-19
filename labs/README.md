@@ -19,6 +19,7 @@ This directory is the current index of implemented Field Labs. Each lab is a sel
 | [13](13-request-deadline-budgeting/) | Request Deadline Budgeting | End-to-end deadlines, downstream timeout bounds, and reserved completion time |
 | [14](14-cooperative-cancellation/) | Cooperative Cancellation | Cancellation propagation, abandoned work, and bounded detection delay |
 | [15](15-load-shedding/) | Load Shedding Under Saturation | Bounded admission, queue capacity, and overload rejection |
+| [16](16-graceful-degradation/) | Graceful Degradation | Required dependencies, optional capabilities, and reduced response modes |
 
 ## Reading the labs
 
