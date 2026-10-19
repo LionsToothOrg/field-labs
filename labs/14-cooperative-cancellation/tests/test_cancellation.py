@@ -1,6 +1,6 @@
 import unittest
 
-from cancellation import simulate_nested_work, simulate_parallel_work
+from cancellation import simulate_finalized_work, simulate_nested_work, simulate_parallel_work
 
 
 class CooperativeCancellationTests(unittest.TestCase):
@@ -92,6 +92,50 @@ class CooperativeCancellationTests(unittest.TestCase):
         self.assertTrue(result.cancelled)
         self.assertEqual([stage.worker for stage in result.stages], ["prepare"])
 
+    def test_finalization_runs_after_cancellation_is_observed(self):
+        result = simulate_finalized_work(
+            planned=10.0,
+            cleanup_duration=1.5,
+            cancel_at=3.2,
+            check_interval=1.0,
+            propagate_cancellation=True,
+        )
+
+        self.assertEqual(result.work_elapsed, 4.0)
+        self.assertEqual(result.cleanup_elapsed, 1.5)
+        self.assertEqual(result.elapsed, 5.5)
+        self.assertTrue(result.cancelled)
+        self.assertTrue(result.cleanup_ran)
+
+    def test_finalization_runs_after_normal_completion(self):
+        result = simulate_finalized_work(
+            planned=2.0,
+            cleanup_duration=0.5,
+            cancel_at=3.0,
+            check_interval=1.0,
+            propagate_cancellation=True,
+        )
+
+        self.assertEqual(result.work_elapsed, 2.0)
+        self.assertEqual(result.elapsed, 2.5)
+        self.assertTrue(result.completed)
+        self.assertFalse(result.cancelled)
+        self.assertTrue(result.cleanup_ran)
+
+    def test_finalization_without_propagation_waits_for_work_then_cleans_up(self):
+        result = simulate_finalized_work(
+            planned=10.0,
+            cleanup_duration=1.0,
+            cancel_at=3.0,
+            check_interval=1.0,
+            propagate_cancellation=False,
+        )
+
+        self.assertEqual(result.work_elapsed, 10.0)
+        self.assertEqual(result.elapsed, 11.0)
+        self.assertTrue(result.completed)
+        self.assertTrue(result.cleanup_ran)
+
     def test_invalid_inputs_are_rejected(self):
         parallel_cases = [
             ({}, 1.0, 1.0),
@@ -127,6 +171,30 @@ class CooperativeCancellationTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     simulate_nested_work(
                         stages,
+                        cancel_at=cancel_at,
+                        check_interval=check_interval,
+                        propagate_cancellation=True,
+                    )
+
+        finalized_cases = [
+            (-1.0, 1.0, 1.0, 1.0),
+            (1.0, -1.0, 1.0, 1.0),
+            (1.0, 1.0, -1.0, 1.0),
+            (1.0, 1.0, 1.0, 0.0),
+            (float("inf"), 1.0, 1.0, 1.0),
+        ]
+
+        for planned, cleanup_duration, cancel_at, check_interval in finalized_cases:
+            with self.subTest(
+                planned=planned,
+                cleanup_duration=cleanup_duration,
+                cancel_at=cancel_at,
+                check_interval=check_interval,
+            ):
+                with self.assertRaises(ValueError):
+                    simulate_finalized_work(
+                        planned=planned,
+                        cleanup_duration=cleanup_duration,
                         cancel_at=cancel_at,
                         check_interval=check_interval,
                         propagate_cancellation=True,
