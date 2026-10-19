@@ -17,6 +17,7 @@ This directory is the current index of implemented Field Labs. Each lab is a sel
 | [11](11-bulkhead-isolation/) | Bulkhead Isolation | Partitioned concurrency limits and saturation containment |
 | [12](12-token-bucket-rate-limiting/) | Token Bucket Rate Limiting | Burst admission, refill accounting, and bounded request rates |
 | [13](13-request-deadline-budgeting/) | Request Deadline Budgeting | End-to-end deadlines, downstream timeout bounds, and reserved completion time |
+| [14](14-cooperative-cancellation/) | Cooperative Cancellation | Cancellation propagation, abandoned work, and bounded detection delay |
 
 ## Reading the labs
 

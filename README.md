@@ -52,7 +52,7 @@ A useful Field Lab has a narrow question, a reproducible baseline, an intentiona
 
 # ⌬ THE LAB BENCH
 
-All thirteen current labs have implemented slices. Their individual READMEs define the evidence, scope, and limitations for each experiment.
+All fourteen current labs have implemented slices. Their individual READMEs define the evidence, scope, and limitations for each experiment.
 
 | ID | Experiment | Engineering focus |
 | :-- | :-- | :-- |
@@ -69,6 +69,7 @@ All thirteen current labs have implemented slices. Their individual READMEs defi
 | **[11](labs/11-bulkhead-isolation/)** | **Bulkhead Isolation** | Partitioned concurrency limits and saturation containment |
 | **[12](labs/12-token-bucket-rate-limiting/)** | **Token Bucket Rate Limiting** | Burst admission, refill accounting, and bounded request rates |
 | **[13](labs/13-request-deadline-budgeting/)** | **Request Deadline Budgeting** | End-to-end deadlines, downstream timeout bounds, and reserved completion time |
+| **[14](labs/14-cooperative-cancellation/)** | **Cooperative Cancellation** | Cancellation propagation, abandoned work, and bounded detection delay |
 
 [**BROWSE THE FULL LAB CATALOG →**](labs/)
 
