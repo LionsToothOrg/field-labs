@@ -1,6 +1,6 @@
 import unittest
 
-from load_shedding import admit_burst
+from load_shedding import admit_burst, drain_admitted
 
 
 class LoadSheddingTests(unittest.TestCase):
@@ -64,6 +64,44 @@ class LoadSheddingTests(unittest.TestCase):
                     admit_burst(
                         [request_id], concurrency_limit=1, queue_limit=0
                     )
+
+    def test_drain_promotes_queued_work_in_fifo_order(self):
+        result = admit_burst(
+            ["req-a", "req-b", "req-c", "req-d", "req-e"],
+            concurrency_limit=2,
+            queue_limit=2,
+        )
+
+        steps = drain_admitted(result, concurrency_limit=2)
+
+        self.assertEqual(len(steps), 2)
+        self.assertEqual(steps[0].completed, ("req-a", "req-b"))
+        self.assertEqual(steps[0].promoted, ("req-c", "req-d"))
+        self.assertEqual(steps[0].queued, ())
+        self.assertEqual(steps[1].completed, ("req-c", "req-d"))
+        self.assertEqual(steps[1].promoted, ())
+
+    def test_shed_work_never_enters_recovery(self):
+        result = admit_burst(
+            ["req-a", "req-b", "req-c"], concurrency_limit=1, queue_limit=1
+        )
+
+        steps = drain_admitted(result, concurrency_limit=1)
+        observed = [request_id for step in steps for request_id in step.completed]
+
+        self.assertEqual(observed, ["req-a", "req-b"])
+        self.assertNotIn("req-c", observed)
+
+    def test_empty_admission_has_no_recovery_steps(self):
+        result = admit_burst([], concurrency_limit=1, queue_limit=1)
+
+        self.assertEqual(drain_admitted(result, concurrency_limit=1), ())
+
+    def test_drain_rejects_capacity_below_existing_running_work(self):
+        result = admit_burst(["req-a", "req-b"], concurrency_limit=2, queue_limit=0)
+
+        with self.assertRaises(ValueError):
+            drain_admitted(result, concurrency_limit=1)
 
 
 if __name__ == "__main__":
