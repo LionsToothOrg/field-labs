@@ -5,6 +5,7 @@ from degradation import (
     FeaturePolicy,
     ResponseMode,
     build_response,
+    build_response_sequence,
     evaluate_feature,
 )
 
@@ -107,6 +108,55 @@ class GracefulDegradationTests(unittest.TestCase):
                 optional_payloads={"analytics": {"trace": "ok"}},
                 fallback_values={},
             )
+
+    def test_recovery_sequence_removes_fallback_after_optional_dependency_recovers(self) -> None:
+        responses = build_response_sequence(
+            self.policy,
+            [
+                self.states(recommendations=DependencyState.UNAVAILABLE),
+                self.states(),
+            ],
+            core_payload={"items": ["synthetic-a"]},
+            optional_payloads={
+                "recommendations": {"items": ["synthetic-recommendation"]},
+                "analytics": {"trace": "synthetic-summary"},
+            },
+            fallback_values={"recommendations": {"items": []}},
+        )
+        self.assertEqual((ResponseMode.DEGRADED, ResponseMode.FULL), tuple(r.mode for r in responses))
+        self.assertEqual({"items": []}, responses[0].optional["recommendations"])
+        self.assertEqual({"items": ["synthetic-recommendation"]}, responses[1].optional["recommendations"])
+
+    def test_repeated_degradation_does_not_reuse_previous_healthy_payload(self) -> None:
+        responses = build_response_sequence(
+            self.policy,
+            [
+                self.states(),
+                self.states(recommendations=DependencyState.UNAVAILABLE),
+                self.states(),
+            ],
+            core_payload={"items": ["synthetic-a"]},
+            optional_payloads={
+                "recommendations": {"items": ["synthetic-recommendation"]},
+                "analytics": {"trace": "synthetic-summary"},
+            },
+            fallback_values={"recommendations": {"items": []}},
+        )
+        self.assertEqual(
+            (ResponseMode.FULL, ResponseMode.DEGRADED, ResponseMode.FULL),
+            tuple(r.mode for r in responses),
+        )
+        self.assertEqual({"items": []}, responses[1].optional["recommendations"])
+
+    def test_empty_recovery_sequence_is_empty(self) -> None:
+        responses = build_response_sequence(
+            self.policy,
+            [],
+            core_payload={"items": []},
+            optional_payloads={},
+            fallback_values={},
+        )
+        self.assertEqual((), responses)
 
 
 if __name__ == "__main__":

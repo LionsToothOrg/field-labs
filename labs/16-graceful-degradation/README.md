@@ -21,6 +21,8 @@ The evaluator returns the response mode plus the unavailable required and option
 
 The response builder then makes that policy concrete. Healthy optional dependencies contribute their synthetic payloads. Unavailable optional dependencies contribute only an explicitly configured fallback value, so their supplied payload is not copied into the reduced response. If a required dependency is unavailable, the builder returns no core or optional payload. Missing healthy payloads and missing fallbacks are rejected rather than guessed.
 
+A deterministic sequence helper applies the same response boundary independently to each supplied state. This makes recovery observable without adding clocks or external health checks: when an optional dependency changes from unavailable to healthy, the next response returns to `full` mode and uses the healthy synthetic payload instead of retaining the fallback. Repeated degradation similarly reselects the fallback rather than carrying forward a previously healthy response.
+
 Run the lab with:
 
 ```bash
@@ -38,12 +40,15 @@ The automated tests verify:
 - missing dependency state and contradictory policy configuration are rejected;
 - an unavailable optional payload is replaced by its configured fallback and does not appear in the reduced response;
 - a required failure omits both core and optional payloads;
-- missing healthy optional payloads and missing fallback values are rejected.
+- missing healthy optional payloads and missing fallback values are rejected;
+- degraded-to-full recovery removes fallback output when the optional dependency becomes healthy;
+- a full-to-degraded-to-full sequence does not reuse stale healthy output during degradation;
+- an empty state sequence produces no responses.
 
 ## Limitations
 
-This is a policy and response-shaping model, not a production dependency-health system. It does not model stale cached data, dependency timeouts, recovery, observability, distributed failure detection, serialization boundaries, or mutable payload aliasing. A `degraded` result proves only that this model selected configured fallback output for the supplied synthetic state.
+This is a policy and response-shaping model, not a production dependency-health system. Recovery is driven by supplied deterministic states rather than probes, timers, or distributed health signals. The lab does not model stale cached data, dependency timeouts, observability, serialization boundaries, mutable payload aliasing, hysteresis, or flapping protection. A `full` result after recovery proves only that this model selected healthy configured output for the supplied synthetic state.
 
-## Next experiment
+## Stopping point
 
-A useful next slice can model recovery from degraded to full mode across a deterministic sequence of dependency states and verify that fallback output is removed once the optional capability is healthy again.
+The lab now covers the intended policy boundary, safe fallback response shaping, and deterministic recovery without pretending to be a production health subsystem. Further resilience work is better isolated in a separate lab if it needs time-based health checks, hysteresis, or distributed failure detection.
