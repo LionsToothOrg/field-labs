@@ -4,19 +4,21 @@
 
 When a caller stops waiting, how much unnecessary downstream work continues if cancellation is not propagated, and how does cooperative cancellation change that behavior?
 
-This first slice uses a deterministic synthetic model of parallel workers. It compares workers that ignore caller cancellation with workers that periodically check a shared cancellation signal.
+This lab uses deterministic synthetic models to compare work that ignores caller cancellation with work that periodically checks a shared cancellation signal.
 
 ## Failure scenario
 
-A request can end while downstream work continues. Without propagation, the caller is gone but slow workers may still consume time and capacity until their original work finishes. Cooperative cancellation reduces that abandoned work, but detection is not instantaneous when workers only check periodically.
+A request can end while downstream work continues. Without propagation, the caller is gone but slow workers may still consume time and capacity until their original work finishes. The same problem compounds across nested stages: later work may start even though the originating request has already been cancelled.
+
+Cooperative cancellation reduces abandoned work, but detection is not instantaneous when work only checks periodically.
 
 ## Approach
 
-`simulate_parallel_work()` starts fabricated workers together at synthetic time zero. Each worker has a planned duration. A caller cancellation occurs at `cancel_at`.
+`simulate_parallel_work()` starts fabricated workers together at synthetic time zero. Each worker has a planned duration and either observes or ignores caller cancellation.
 
-When propagation is disabled, workers run their full planned duration. When propagation is enabled, a worker that is still active stops at its first cancellation check at or after `cancel_at`. A worker that finishes before that check completes normally.
+`simulate_nested_work()` models sequential nested stages that share the same cancellation signal and global polling schedule. With propagation enabled, an active stage stops when cancellation is observed and later stages are not admitted. Without propagation, every stage runs to completion.
 
-The model reports both wall-clock completion time and aggregate synthetic work so the difference between caller latency and consumed worker time stays explicit.
+Both models keep timing deterministic and report consumed synthetic work explicitly. They do not invoke network services or real concurrency primitives.
 
 ## Run the tests
 
@@ -30,7 +32,7 @@ All names, durations, and events are fabricated for this lab. No network service
 
 ## Evidence in this slice
 
-The tests compare propagated and non-propagated cancellation, verify periodic-check detection delay, preserve normal completion for work that finishes before its next cancellation check, and reject invalid synthetic inputs.
+The tests cover parallel propagated and non-propagated cancellation, periodic-check detection delay, normal completion before the next cancellation check, nested cancellation during an active stage, prevention of later-stage admission, nested work without propagation, and invalid synthetic inputs.
 
 Treat repository CI for the commit as the published validation record; do not infer passing status from this README alone.
 
@@ -38,4 +40,4 @@ Treat repository CI for the commit as the published validation record; do not in
 
 This is a cancellation model, not a production concurrency runtime. It does not create threads or processes, cancel HTTP or RPC requests, interrupt blocking I/O, model cleanup handlers, propagate context across process boundaries, or measure scheduler overhead. Fixed check intervals are synthetic policy inputs rather than measured production behavior.
 
-A later slice can investigate cancellation across nested work or cleanup behavior after this baseline is validated.
+The nested model intentionally uses sequential stages and one shared polling schedule. A later slice could investigate cleanup/finalization guarantees or independently polling child operations without turning this lab into a framework.
