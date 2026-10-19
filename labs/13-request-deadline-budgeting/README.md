@@ -2,13 +2,13 @@
 
 ## Question
 
-When one request has a fixed end-to-end deadline, how should a service choose a timeout for a downstream call without accidentally giving that dependency more time than the request has left?
+When one request has a fixed end-to-end deadline, how should a service choose timeouts for downstream calls without accidentally giving dependencies more time than the request has left?
 
-This first slice models deadline budgeting with deterministic synthetic timestamps. The goal is deliberately narrow: calculate a bounded downstream timeout, preserve an explicit reserve for work after the call, and reject work when no usable budget remains.
+This lab models deadline budgeting with deterministic synthetic timestamps. It calculates bounded downstream timeouts, preserves an explicit reserve for work after calls, and rejects work when no usable budget remains.
 
 ## Failure scenario
 
-A locally configured dependency timeout can outlive the caller's remaining request budget. For example, a service may permit a 10-second dependency call even though the request has only 4 seconds left. The dependency timeout is valid in isolation but invalid in the end-to-end context.
+A locally configured dependency timeout can outlive the caller's remaining request budget. The risk compounds across sequential calls: reusing the same per-hop timeout without reconsidering the shared deadline can authorize more waiting than the original request can afford.
 
 ## Approach
 
@@ -20,6 +20,8 @@ A locally configured dependency timeout can outlive the caller's remaining reque
 - `reserve`: time intentionally retained for work after the dependency returns.
 
 The usable budget is `deadline - now - reserve`. A call is admitted only when that value is positive, and its timeout is the smaller of the usable budget and the configured maximum.
+
+`budget_sequential_calls()` applies that same rule before each synthetic call. The synthetic clock advances by the smaller of the supplied duration and the timeout granted for that step, so every subsequent decision is recomputed against the original absolute deadline rather than a stale per-hop budget.
 
 ## Run the tests
 
@@ -39,12 +41,16 @@ The automated tests cover:
 2. a timeout shortened by the caller's remaining deadline;
 3. preservation of a post-call reserve;
 4. rejection after deadline exhaustion;
-5. invalid and non-finite configuration values.
+5. invalid and non-finite configuration values;
+6. sequential calls recomputing their budget from one shared deadline;
+7. sequencing stopping once only reserved time remains;
+8. synthetic call duration being capped by its granted timeout;
+9. invalid synthetic durations being rejected.
 
 Treat the repository CI result for the commit as the validation record; do not infer passing status from this README alone.
 
 ## Limitations
 
-This is a budgeting primitive, not a production request runtime. It does not cancel running work, propagate deadlines over HTTP or RPC, model clock synchronization between hosts, allocate budgets across parallel fan-out, or guarantee that a dependency returns within the selected timeout. The reserve is caller policy, not a measured latency requirement.
+This is a budgeting model, not a production request runtime. It does not cancel running work, propagate deadlines over HTTP or RPC, model clock synchronization between hosts, allocate budgets across parallel fan-out, or guarantee that a dependency returns within the selected timeout. Synthetic durations represent elapsed work for the experiment only, and the reserve is caller policy rather than a measured latency requirement.
 
-A useful next experiment would apply the same budget across a sequence of synthetic downstream calls and show how stale per-hop timeouts can exceed the original end-to-end deadline.
+A useful next experiment would compare sequential and parallel fan-out policies while keeping one explicit end-to-end deadline.

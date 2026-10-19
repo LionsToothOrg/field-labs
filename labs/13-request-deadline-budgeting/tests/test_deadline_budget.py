@@ -1,6 +1,6 @@
 import unittest
 
-from deadline_budget import budget_downstream_call
+from deadline_budget import budget_downstream_call, budget_sequential_calls
 
 
 class DeadlineBudgetTests(unittest.TestCase):
@@ -45,6 +45,56 @@ class DeadlineBudgetTests(unittest.TestCase):
             with self.subTest(scenario=scenario):
                 with self.assertRaises((TypeError, ValueError)):
                     budget_downstream_call(**scenario)
+
+    def test_sequential_calls_recompute_from_shared_deadline(self):
+        calls = budget_sequential_calls(
+            start=0,
+            deadline=10,
+            durations=(4, 4, 4),
+            max_timeout=6,
+            reserve=1,
+        )
+
+        self.assertEqual([call.started_at for call in calls], [0, 4, 8])
+        self.assertEqual([call.budget.timeout for call in calls], [6, 5, 1])
+        self.assertEqual([call.budget.remaining for call in calls], [10, 6, 2])
+
+    def test_sequential_calls_stop_after_budget_is_exhausted(self):
+        calls = budget_sequential_calls(
+            start=0,
+            deadline=5,
+            durations=(3, 2, 1),
+            max_timeout=4,
+            reserve=2,
+        )
+
+        self.assertEqual(len(calls), 2)
+        self.assertTrue(calls[0].budget.allowed)
+        self.assertFalse(calls[1].budget.allowed)
+        self.assertEqual(calls[1].budget.reason, "deadline_exhausted")
+
+    def test_sequential_call_duration_is_capped_by_granted_timeout(self):
+        calls = budget_sequential_calls(
+            start=0,
+            deadline=6,
+            durations=(10, 1),
+            max_timeout=4,
+            reserve=1,
+        )
+
+        self.assertEqual(calls[1].started_at, 4)
+        self.assertEqual(calls[1].budget.timeout, 1)
+
+    def test_sequential_calls_reject_invalid_duration(self):
+        for duration in (-1, float("inf"), True):
+            with self.subTest(duration=duration):
+                with self.assertRaises((TypeError, ValueError)):
+                    budget_sequential_calls(
+                        start=0,
+                        deadline=10,
+                        durations=(duration,),
+                        max_timeout=2,
+                    )
 
 
 if __name__ == "__main__":
