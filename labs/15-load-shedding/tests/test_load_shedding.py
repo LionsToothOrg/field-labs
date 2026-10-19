@@ -1,6 +1,6 @@
 import unittest
 
-from load_shedding import admit_burst, drain_admitted
+from load_shedding import admit_burst, drain_admitted, simulate_load
 
 
 class LoadSheddingTests(unittest.TestCase):
@@ -102,6 +102,74 @@ class LoadSheddingTests(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             drain_admitted(result, concurrency_limit=1)
+
+    def test_sustained_arrivals_accumulate_shedding_when_service_lags(self):
+        ticks = simulate_load(
+            [
+                ["req-a", "req-b"],
+                ["req-c", "req-d"],
+                ["req-e", "req-f"],
+            ],
+            concurrency_limit=1,
+            queue_limit=1,
+            completions_per_tick=1,
+        )
+
+        self.assertEqual([tick.shed_total for tick in ticks], [0, 1, 2])
+        self.assertEqual(ticks[1].completed, ("req-a",))
+        self.assertEqual(ticks[1].promoted, ("req-b",))
+        self.assertEqual(
+            [admission.decision for admission in ticks[1].admissions],
+            ["queued", "shed"],
+        )
+
+    def test_service_capacity_can_prevent_shedding(self):
+        ticks = simulate_load(
+            [["req-a"], ["req-b"], ["req-c"]],
+            concurrency_limit=1,
+            queue_limit=0,
+            completions_per_tick=1,
+        )
+
+        self.assertEqual([tick.shed_total for tick in ticks], [0, 0, 0])
+        self.assertEqual(ticks[-1].running, ("req-c",))
+
+    def test_idle_tick_drains_queue_before_new_arrivals(self):
+        ticks = simulate_load(
+            [["req-a", "req-b"], [], ["req-c"]],
+            concurrency_limit=1,
+            queue_limit=1,
+            completions_per_tick=1,
+        )
+
+        self.assertEqual(ticks[1].completed, ("req-a",))
+        self.assertEqual(ticks[1].promoted, ("req-b",))
+        self.assertEqual(ticks[1].queued, ())
+        self.assertEqual(ticks[2].completed, ("req-b",))
+        self.assertEqual(ticks[2].running, ("req-c",))
+
+    def test_zero_completions_exposes_persistent_saturation(self):
+        ticks = simulate_load(
+            [["req-a"], ["req-b"], ["req-c"]],
+            concurrency_limit=1,
+            queue_limit=1,
+            completions_per_tick=0,
+        )
+
+        self.assertEqual([tick.shed_total for tick in ticks], [0, 0, 1])
+        self.assertEqual(ticks[-1].running, ("req-a",))
+        self.assertEqual(ticks[-1].queued, ("req-b",))
+
+    def test_simulation_rejects_invalid_completion_capacity(self):
+        for completions_per_tick in [-1, 1.5, True]:
+            with self.subTest(completions_per_tick=completions_per_tick):
+                with self.assertRaises(ValueError):
+                    simulate_load(
+                        [["req-a"]],
+                        concurrency_limit=1,
+                        queue_limit=1,
+                        completions_per_tick=completions_per_tick,
+                    )
 
 
 if __name__ == "__main__":

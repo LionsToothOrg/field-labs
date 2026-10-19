@@ -27,6 +27,18 @@ class RecoveryStep:
     queued: tuple[str, ...]
 
 
+@dataclass(frozen=True)
+class LoadTick:
+    tick: int
+    arrivals: tuple[str, ...]
+    completed: tuple[str, ...]
+    promoted: tuple[str, ...]
+    admissions: tuple[Admission, ...]
+    running: tuple[str, ...]
+    queued: tuple[str, ...]
+    shed_total: int
+
+
 def _require_capacity(name: str, value: int) -> None:
     if isinstance(value, bool) or not isinstance(value, int) or value < 0:
         raise ValueError(f"{name} must be a non-negative integer")
@@ -115,3 +127,62 @@ def drain_admitted(
         )
 
     return tuple(steps)
+
+
+def simulate_load(
+    arrival_batches: Iterable[Iterable[str]],
+    *,
+    concurrency_limit: int,
+    queue_limit: int,
+    completions_per_tick: int,
+) -> tuple[LoadTick, ...]:
+    """Model deterministic arrivals, service completions, and bounded admission."""
+
+    _require_capacity("concurrency_limit", concurrency_limit)
+    _require_capacity("queue_limit", queue_limit)
+    _require_capacity("completions_per_tick", completions_per_tick)
+
+    running: list[str] = []
+    queued: list[str] = []
+    shed_total = 0
+    ticks: list[LoadTick] = []
+
+    for tick, batch in enumerate(arrival_batches):
+        arrivals = _require_request_ids(batch)
+
+        completed = tuple(running[:completions_per_tick])
+        del running[: len(completed)]
+
+        promoted: list[str] = []
+        while queued and len(running) < concurrency_limit:
+            request_id = queued.pop(0)
+            running.append(request_id)
+            promoted.append(request_id)
+
+        admissions: list[Admission] = []
+        for request_id in arrivals:
+            if len(running) < concurrency_limit:
+                decision: Decision = "running"
+                running.append(request_id)
+            elif len(queued) < queue_limit:
+                decision = "queued"
+                queued.append(request_id)
+            else:
+                decision = "shed"
+                shed_total += 1
+            admissions.append(Admission(request_id=request_id, decision=decision))
+
+        ticks.append(
+            LoadTick(
+                tick=tick,
+                arrivals=arrivals,
+                completed=completed,
+                promoted=tuple(promoted),
+                admissions=tuple(admissions),
+                running=tuple(running),
+                queued=tuple(queued),
+                shed_total=shed_total,
+            )
+        )
+
+    return tuple(ticks)
