@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 from enum import Enum
+from typing import Any
 
 
 class DependencyState(str, Enum):
@@ -35,6 +36,13 @@ class Evaluation:
     unavailable_optional: tuple[str, ...]
 
 
+@dataclass(frozen=True)
+class FeatureResponse:
+    mode: ResponseMode
+    core: Any | None
+    optional: dict[str, Any]
+
+
 def evaluate_feature(
     policy: FeaturePolicy,
     dependency_states: dict[str, DependencyState],
@@ -64,3 +72,30 @@ def evaluate_feature(
         mode = ResponseMode.FULL
 
     return Evaluation(mode, unavailable_required, unavailable_optional)
+
+
+def build_response(
+    policy: FeaturePolicy,
+    dependency_states: dict[str, DependencyState],
+    *,
+    core_payload: Any,
+    optional_payloads: dict[str, Any],
+    fallback_values: dict[str, Any],
+) -> FeatureResponse:
+    """Build a synthetic response while isolating unavailable optional payloads."""
+    evaluation = evaluate_feature(policy, dependency_states)
+    if evaluation.mode is ResponseMode.UNAVAILABLE:
+        return FeatureResponse(ResponseMode.UNAVAILABLE, None, {})
+
+    optional: dict[str, Any] = {}
+    for name in policy.optional_dependencies:
+        if dependency_states[name] is DependencyState.HEALTHY:
+            if name not in optional_payloads:
+                raise ValueError(f"missing optional payload: {name}")
+            optional[name] = optional_payloads[name]
+        else:
+            if name not in fallback_values:
+                raise ValueError(f"missing fallback value: {name}")
+            optional[name] = fallback_values[name]
+
+    return FeatureResponse(evaluation.mode, core_payload, optional)
