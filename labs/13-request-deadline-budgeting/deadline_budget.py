@@ -21,6 +21,40 @@ class SequentialCallBudget:
     budget: DeadlineBudget
 
 
+@dataclass(frozen=True)
+class ParallelCallBudget:
+    call: int
+    started_at: float
+    duration: float
+    elapsed: float
+    budget: DeadlineBudget
+
+
+@dataclass(frozen=True)
+class ParallelFanoutBudget:
+    calls: tuple[ParallelCallBudget, ...]
+    completes_at: float
+    remaining: float
+
+
+def _finite_number(name: str, value: float) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise TypeError(f"{name} must be a finite number")
+    if not math.isfinite(value):
+        raise ValueError(f"{name} must be finite")
+    return float(value)
+
+
+def _durations(values: Iterable[float]) -> tuple[float, ...]:
+    normalized: list[float] = []
+    for duration in values:
+        value = _finite_number("durations", duration)
+        if value < 0:
+            raise ValueError("durations must be non-negative")
+        normalized.append(value)
+    return tuple(normalized)
+
+
 def budget_downstream_call(
     *,
     now: float,
@@ -29,35 +63,23 @@ def budget_downstream_call(
     reserve: float = 0.0,
 ) -> DeadlineBudget:
     """Bound a downstream timeout by the caller's remaining synthetic deadline."""
-    values = {
-        "now": now,
-        "deadline": deadline,
-        "max_timeout": max_timeout,
-        "reserve": reserve,
-    }
-    for name, value in values.items():
-        if isinstance(value, bool) or not isinstance(value, (int, float)):
-            raise TypeError(f"{name} must be a finite number")
-        if not math.isfinite(value):
-            raise ValueError(f"{name} must be finite")
+    now = _finite_number("now", now)
+    deadline = _finite_number("deadline", deadline)
+    max_timeout = _finite_number("max_timeout", max_timeout)
+    reserve = _finite_number("reserve", reserve)
 
     if max_timeout <= 0:
         raise ValueError("max_timeout must be greater than zero")
     if reserve < 0:
         raise ValueError("reserve must be non-negative")
 
-    remaining = max(0.0, float(deadline) - float(now))
-    usable = remaining - float(reserve)
+    remaining = max(0.0, deadline - now)
+    usable = remaining - reserve
 
     if usable <= 0:
         return DeadlineBudget(False, None, remaining, "deadline_exhausted")
 
-    return DeadlineBudget(
-        True,
-        min(float(max_timeout), usable),
-        remaining,
-        "allowed",
-    )
+    return DeadlineBudget(True, min(max_timeout, usable), remaining, "allowed")
 
 
 def budget_sequential_calls(
@@ -68,41 +90,17 @@ def budget_sequential_calls(
     max_timeout: float,
     reserve: float = 0.0,
 ) -> tuple[SequentialCallBudget, ...]:
-    """Budget sequential synthetic calls against one shared absolute deadline.
-
-    Each admitted call advances the synthetic clock by at most the timeout it was
-    granted. This models deadline-aware sequencing without claiming that a real
-    dependency will honor cancellation or return within its timeout.
-    """
-    initial = budget_downstream_call(
-        now=start,
-        deadline=deadline,
-        max_timeout=max_timeout,
-        reserve=reserve,
-    )
-
-    normalized: list[float] = []
-    for duration in durations:
-        if isinstance(duration, bool) or not isinstance(duration, (int, float)):
-            raise TypeError("durations must contain finite numbers")
-        if not math.isfinite(duration):
-            raise ValueError("durations must contain finite numbers")
-        if duration < 0:
-            raise ValueError("durations must be non-negative")
-        normalized.append(float(duration))
-
-    now = float(start)
+    """Budget sequential synthetic calls against one shared absolute deadline."""
+    normalized = _durations(durations)
+    now = _finite_number("start", start)
     results: list[SequentialCallBudget] = []
+
     for step, duration in enumerate(normalized, start=1):
-        budget = (
-            initial
-            if step == 1
-            else budget_downstream_call(
-                now=now,
-                deadline=deadline,
-                max_timeout=max_timeout,
-                reserve=reserve,
-            )
+        budget = budget_downstream_call(
+            now=now,
+            deadline=deadline,
+            max_timeout=max_timeout,
+            reserve=reserve,
         )
         results.append(SequentialCallBudget(step, now, duration, budget))
         if not budget.allowed:
@@ -110,3 +108,39 @@ def budget_sequential_calls(
         now += min(duration, budget.timeout or 0.0)
 
     return tuple(results)
+
+
+def budget_parallel_calls(
+    *,
+    start: float,
+    deadline: float,
+    durations: Iterable[float],
+    max_timeout: float,
+    reserve: float = 0.0,
+) -> ParallelFanoutBudget:
+    """Budget synthetic parallel fan-out against one shared absolute deadline.
+
+    Every branch starts at the same synthetic instant and receives the same
+    deadline-aware timeout. Fan-out wall time is therefore the slowest admitted
+    branch, capped by that timeout, rather than the sum of branch durations.
+    """
+    normalized = _durations(durations)
+    start = _finite_number("start", start)
+    budget = budget_downstream_call(
+        now=start,
+        deadline=deadline,
+        max_timeout=max_timeout,
+        reserve=reserve,
+    )
+
+    calls: list[ParallelCallBudget] = []
+    elapsed_values: list[float] = []
+    for call, duration in enumerate(normalized, start=1):
+        elapsed = min(duration, budget.timeout or 0.0) if budget.allowed else 0.0
+        calls.append(ParallelCallBudget(call, start, duration, elapsed, budget))
+        elapsed_values.append(elapsed)
+
+    fanout_elapsed = max(elapsed_values, default=0.0)
+    completes_at = start + fanout_elapsed
+    remaining = max(0.0, _finite_number("deadline", deadline) - completes_at)
+    return ParallelFanoutBudget(tuple(calls), completes_at, remaining)
