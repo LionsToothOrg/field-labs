@@ -4,11 +4,11 @@
 
 When a feature depends on several downstream capabilities, which failures should remove the feature entirely and which should produce a deliberately reduced response?
 
-This first slice models that decision as a deterministic policy. It uses fabricated dependency names and states only; it does not contact external services.
+This lab models that decision with fabricated dependency names, states, and payloads only; it does not contact external services.
 
 ## Baseline
 
-Treating every downstream dependency as equally critical makes an optional failure indistinguishable from a failure that prevents the core feature from working. That all-or-nothing boundary can unnecessarily turn partial dependency loss into total feature loss.
+Treating every downstream dependency as equally critical makes an optional failure indistinguishable from a failure that prevents the core feature from working. That all-or-nothing boundary can unnecessarily turn partial dependency loss into total feature loss. A second risk appears when a system declares itself degraded but still carries data from the unavailable capability into its response.
 
 ## Experiment
 
@@ -19,7 +19,9 @@ Treating every downstream dependency as equally critical makes an optional failu
 
 The evaluator returns the response mode plus the unavailable required and optional dependencies. Referenced dependencies must have an explicit state; missing state is rejected rather than silently assumed healthy.
 
-Run the slice with:
+The response builder then makes that policy concrete. Healthy optional dependencies contribute their synthetic payloads. Unavailable optional dependencies contribute only an explicitly configured fallback value, so their supplied payload is not copied into the reduced response. If a required dependency is unavailable, the builder returns no core or optional payload. Missing healthy payloads and missing fallbacks are rejected rather than guessed.
+
+Run the lab with:
 
 ```bash
 PYTHONPATH=labs/16-graceful-degradation python -m unittest discover -s labs/16-graceful-degradation/tests -v
@@ -33,12 +35,15 @@ The automated tests verify:
 - one or more optional failures produce a degraded response;
 - a required failure makes the feature unavailable;
 - unavailable dependencies are reported deterministically;
-- missing dependency state and contradictory policy configuration are rejected.
+- missing dependency state and contradictory policy configuration are rejected;
+- an unavailable optional payload is replaced by its configured fallback and does not appear in the reduced response;
+- a required failure omits both core and optional payloads;
+- missing healthy optional payloads and missing fallback values are rejected.
 
 ## Limitations
 
-This is a policy model, not a production dependency-health system. It does not yet model stale cached data, fallback values, dependency timeouts, recovery, partial response payloads, observability, or distributed failure detection. A `degraded` result proves only that this policy permits a reduced feature mode for the supplied synthetic state.
+This is a policy and response-shaping model, not a production dependency-health system. It does not model stale cached data, dependency timeouts, recovery, observability, distributed failure detection, serialization boundaries, or mutable payload aliasing. A `degraded` result proves only that this model selected configured fallback output for the supplied synthetic state.
 
 ## Next experiment
 
-A useful next slice can make the degradation concrete by defining safe fallback outputs and proving that unavailable optional data cannot leak into the reduced response.
+A useful next slice can model recovery from degraded to full mode across a deterministic sequence of dependency states and verify that fallback output is removed once the optional capability is healthy again.
