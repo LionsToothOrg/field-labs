@@ -1,10 +1,10 @@
-"""Deterministic model of cooperative cancellation across parallel work."""
+"""Deterministic model of cooperative cancellation across synthetic work."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 import math
-from typing import Mapping
+from typing import Mapping, Sequence
 
 
 @dataclass(frozen=True)
@@ -23,9 +23,21 @@ class SimulationResult:
     total_work: float
 
 
+@dataclass(frozen=True)
+class NestedWorkResult:
+    stages: tuple[WorkResult, ...]
+    elapsed: float
+    completed: bool
+    cancelled: bool
+
+
 def _require_finite_nonnegative(name: str, value: float) -> None:
     if not math.isfinite(value) or value < 0:
         raise ValueError(f"{name} must be finite and non-negative")
+
+
+def _cancellation_observed_at(cancel_at: float, check_interval: float) -> float:
+    return math.ceil(cancel_at / check_interval) * check_interval
 
 
 def simulate_parallel_work(
@@ -35,13 +47,7 @@ def simulate_parallel_work(
     check_interval: float,
     propagate_cancellation: bool,
 ) -> SimulationResult:
-    """Model workers that either observe or ignore a caller cancellation.
-
-    Workers start together at synthetic time zero. Cooperative workers check for
-    cancellation at fixed intervals. A worker that finishes before its next
-    check completes normally; otherwise it stops at the first check at or after
-    ``cancel_at``. Non-propagating workers run their full planned duration.
-    """
+    """Model workers that either observe or ignore a caller cancellation."""
 
     _require_finite_nonnegative("cancel_at", cancel_at)
     if not math.isfinite(check_interval) or check_interval <= 0:
@@ -60,7 +66,7 @@ def simulate_parallel_work(
             completed = True
             cancelled = False
         else:
-            observed_at = math.ceil(cancel_at / check_interval) * check_interval
+            observed_at = _cancellation_observed_at(cancel_at, check_interval)
             elapsed = min(planned, observed_at)
             completed = planned <= observed_at
             cancelled = not completed
@@ -79,4 +85,58 @@ def simulate_parallel_work(
         workers=tuple(results),
         wall_time=max(result.elapsed for result in results),
         total_work=sum(result.elapsed for result in results),
+    )
+
+
+def simulate_nested_work(
+    stages: Sequence[tuple[str, float]],
+    *,
+    cancel_at: float,
+    check_interval: float,
+    propagate_cancellation: bool,
+) -> NestedWorkResult:
+    """Model sequential nested stages sharing one caller cancellation signal.
+
+    Cooperative stages observe cancellation on a global polling schedule measured
+    from synthetic time zero. Once cancellation is observed, no later stage is
+    admitted. Without propagation, every stage runs to completion.
+    """
+
+    _require_finite_nonnegative("cancel_at", cancel_at)
+    if not math.isfinite(check_interval) or check_interval <= 0:
+        raise ValueError("check_interval must be finite and greater than zero")
+    if not stages:
+        raise ValueError("stages must not be empty")
+
+    observed_at = _cancellation_observed_at(cancel_at, check_interval)
+    elapsed = 0.0
+    results: list[WorkResult] = []
+
+    for stage, planned in stages:
+        if not stage:
+            raise ValueError("stage names must not be empty")
+        _require_finite_nonnegative(f"workload for {stage}", planned)
+
+        if propagate_cancellation and elapsed >= observed_at:
+            break
+
+        if propagate_cancellation and elapsed < observed_at < elapsed + planned:
+            stage_elapsed = observed_at - elapsed
+            results.append(
+                WorkResult(stage, planned, stage_elapsed, completed=False, cancelled=True)
+            )
+            elapsed = observed_at
+            return NestedWorkResult(tuple(results), elapsed, completed=False, cancelled=True)
+
+        results.append(
+            WorkResult(stage, planned, planned, completed=True, cancelled=False)
+        )
+        elapsed += planned
+
+    cancelled = propagate_cancellation and elapsed >= observed_at and len(results) < len(stages)
+    return NestedWorkResult(
+        stages=tuple(results),
+        elapsed=elapsed,
+        completed=len(results) == len(stages) and not cancelled,
+        cancelled=cancelled,
     )
