@@ -71,6 +71,9 @@ jobs:
       - name: Run load shedding tests
         run: PYTHONPATH=labs/15-load-shedding python -m unittest discover -s labs/15-load-shedding/tests -v
 
+      - name: Run graceful degradation tests
+        run: PYTHONPATH=labs/16-graceful-degradation python -m unittest discover -s labs/16-graceful-degradation/tests -v
+
       - name: Validate interactive lab bench JavaScript
         run: node --check site/app.js
 
