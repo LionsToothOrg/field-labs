@@ -28,6 +28,25 @@ class CacheResult:
     revalidate: bool
 
 
+@dataclass(frozen=True)
+class RefreshRequest:
+    request_id: str
+    cache_key: str
+
+
+@dataclass(frozen=True)
+class RefreshGroup:
+    cache_key: str
+    leader_request_id: str
+    follower_request_ids: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class RefreshPlan:
+    groups: tuple[RefreshGroup, ...]
+    origin_refresh_count: int
+
+
 def evaluate_cache_entry(
     entry: CacheEntry | None,
     *,
@@ -94,3 +113,48 @@ def apply_revalidation_outcome(
         ttl_ms=entry.ttl_ms,
     )
     return evaluate_cache_entry(refreshed_entry, now_ms=now_ms, max_stale_ms=max_stale_ms)
+
+
+def plan_stale_refreshes(
+    requests: list[RefreshRequest],
+    *,
+    entries_by_key: dict[str, CacheEntry | None],
+    now_ms: int,
+    max_stale_ms: int,
+) -> RefreshPlan:
+    """Elect one synthetic refresh leader per stale cache key."""
+    seen_request_ids: set[str] = set()
+    grouped_request_ids: dict[str, list[str]] = {}
+
+    for request in requests:
+        if not isinstance(request, RefreshRequest):
+            raise ValueError("requests must contain RefreshRequest values")
+        if not isinstance(request.request_id, str) or not request.request_id:
+            raise ValueError("request_id must be a non-empty string")
+        if not isinstance(request.cache_key, str) or not request.cache_key:
+            raise ValueError("cache_key must be a non-empty string")
+        if request.request_id in seen_request_ids:
+            raise ValueError("request_id values must be unique")
+        seen_request_ids.add(request.request_id)
+
+        if request.cache_key not in entries_by_key:
+            raise ValueError("every request cache_key must have an explicit cache entry")
+        decision = evaluate_cache_entry(
+            entries_by_key[request.cache_key],
+            now_ms=now_ms,
+            max_stale_ms=max_stale_ms,
+        )
+        if decision.decision is not CacheDecision.STALE:
+            raise ValueError("refresh planning requires stale cache entries")
+
+        grouped_request_ids.setdefault(request.cache_key, []).append(request.request_id)
+
+    groups = tuple(
+        RefreshGroup(
+            cache_key=cache_key,
+            leader_request_id=request_ids[0],
+            follower_request_ids=tuple(request_ids[1:]),
+        )
+        for cache_key, request_ids in grouped_request_ids.items()
+    )
+    return RefreshPlan(groups=groups, origin_refresh_count=len(groups))
