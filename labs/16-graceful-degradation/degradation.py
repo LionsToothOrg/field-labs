@@ -99,3 +99,24 @@ def build_response(
             optional[name] = fallback_values[name]
 
     return FeatureResponse(evaluation.mode, core_payload, optional)
+
+
+def build_response_sequence(
+    policy: FeaturePolicy,
+    dependency_state_sequence: list[dict[str, DependencyState]],
+    *,
+    core_payload: Any,
+    optional_payloads: dict[str, Any],
+    fallback_values: dict[str, Any],
+) -> tuple[FeatureResponse, ...]:
+    """Build independent responses for a deterministic dependency-state sequence."""
+    return tuple(
+        build_response(
+            policy,
+            states,
+            core_payload=core_payload,
+            optional_payloads=optional_payloads,
+            fallback_values=fallback_values,
+        )
+        for states in dependency_state_sequence
+    )
