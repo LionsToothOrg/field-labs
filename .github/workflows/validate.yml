@@ -77,6 +77,9 @@ jobs:
       - name: Run request coalescing tests
         run: PYTHONPATH=labs/17-request-coalescing python -m unittest discover -s labs/17-request-coalescing/tests -v
 
+      - name: Run stale cache fallback tests
+        run: PYTHONPATH=labs/18-stale-cache-fallback python -m unittest discover -s labs/18-stale-cache-fallback/tests -v
+
       - name: Validate interactive lab bench JavaScript
         run: node --check site/app.js
 
