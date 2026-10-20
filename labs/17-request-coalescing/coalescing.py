@@ -165,3 +165,61 @@ def fan_out_failures(
             )
 
     return FailureFanoutResult(deliveries=tuple(deliveries), origin_loads=result.origin_loads)
+
+
+@dataclass(frozen=True)
+class DeliveredTimeout:
+    request_id: str
+    key: str
+    timeout_ms: int
+    source_request_id: str
+
+
+@dataclass(frozen=True)
+class TimeoutFanoutResult:
+    deliveries: tuple[DeliveredTimeout, ...]
+    origin_loads: int
+
+
+def fan_out_terminal_timeouts(
+    result: CoalescingResult,
+    leader_timeouts_ms: dict[str, int],
+) -> TimeoutFanoutResult:
+    """Deliver one shared terminal timeout for each coalesced leader.
+
+    This slice intentionally models no retry after timeout. Every group must
+    supply exactly one positive timeout for its elected leader before any
+    delivery is returned, so followers cannot create independent retry work.
+    """
+    expected_leaders = {group.leader.request_id for group in result.groups}
+    supplied_leaders = set(leader_timeouts_ms)
+
+    missing = expected_leaders - supplied_leaders
+    unexpected = supplied_leaders - expected_leaders
+    if missing:
+        raise ValueError(f"missing leader timeout: {sorted(missing)[0]}")
+    if unexpected:
+        raise ValueError(f"unexpected leader timeout: {sorted(unexpected)[0]}")
+
+    invalid = sorted(
+        leader_id
+        for leader_id, timeout_ms in leader_timeouts_ms.items()
+        if isinstance(timeout_ms, bool) or not isinstance(timeout_ms, int) or timeout_ms <= 0
+    )
+    if invalid:
+        raise ValueError(f"invalid leader timeout: {invalid[0]}")
+
+    deliveries: list[DeliveredTimeout] = []
+    for group in result.groups:
+        timeout_ms = leader_timeouts_ms[group.leader.request_id]
+        for request in (group.leader, *group.followers):
+            deliveries.append(
+                DeliveredTimeout(
+                    request_id=request.request_id,
+                    key=group.key,
+                    timeout_ms=timeout_ms,
+                    source_request_id=group.leader.request_id,
+                )
+            )
+
+    return TimeoutFanoutResult(deliveries=tuple(deliveries), origin_loads=result.origin_loads)

@@ -8,7 +8,7 @@ When several requests in the same synthetic arrival batch need the same resource
 
 A cache miss or other expensive lookup can cause several callers to request the same key at nearly the same time. If every caller starts its own downstream load, identical demand is amplified precisely when the dependency may already be under pressure.
 
-This lab models that boundary without pretending to implement real concurrency. Requests, returned values, and failures are fabricated records in a deterministic batch.
+This lab models that boundary without pretending to implement real concurrency. Requests, returned values, failures, and timeout values are fabricated records in a deterministic batch.
 
 ## Experiment
 
@@ -20,21 +20,16 @@ This lab models that boundary without pretending to implement real concurrency. 
 - different keys remain isolated and do not coalesce;
 - duplicate request identifiers and empty identifiers are rejected.
 
-`fan_out_successes` then models successful leader completion:
+`fan_out_successes` models successful leader completion, while `fan_out_failures` models explicit leader failure. In both cases one leader outcome is shared with the whole coalesced group, the leader is recorded as the source, and follower-supplied independent outcomes are rejected.
 
-- exactly one supplied value is accepted for each leader;
-- the leader and all of its followers receive that same value;
-- every delivery records the leader request as its source;
-- follower-supplied independent values are rejected;
-- incomplete leader results are rejected before any deliveries are returned.
+`fan_out_terminal_timeouts` adds a bounded terminal-timeout policy:
 
-`fan_out_failures` models the corresponding failure boundary:
-
-- exactly one non-empty synthetic failure is accepted for each leader;
-- the leader and all followers observe the same failure;
-- every failure delivery records the leader request as its source;
-- followers cannot inject independent failure outcomes;
-- incomplete or empty leader failures are rejected before any deliveries are returned.
+- exactly one positive timeout is supplied for each elected leader;
+- the leader and every follower observe that same timeout;
+- each timeout delivery records the elected leader as its source;
+- followers cannot inject independent timeout decisions;
+- missing, non-positive, boolean, or non-integer timeout values are rejected before delivery;
+- timeout is terminal in this slice: no follower retry or replacement leader is modeled.
 
 Run the lab with:
 
@@ -44,18 +39,16 @@ PYTHONPATH=labs/17-request-coalescing python -m unittest discover -s labs/17-req
 
 ## Evidence
 
-The automated tests verify that three requests for one synthetic key produce one modeled origin load and two avoided duplicate loads. They also verify key isolation, deterministic leader/follower ordering, empty batches, and invalid identifier rejection.
+The automated tests cover same-key coalescing, key isolation, deterministic leader/follower ordering, successful and failed leader fan-out, empty batches, and invalid identifier rejection.
 
-The success fan-out tests verify that followers receive the leader's synthetic value without introducing additional modeled origin loads, separate keys receive only their own leader values, missing leader results fail closed, and followers cannot inject independent origin values.
+The timeout tests verify shared terminal timeout delivery, isolation across keys, rejection of missing or follower-supplied timeout decisions, validation of timeout values, and preservation of the original modeled origin-load count. This demonstrates a no-retry timeout policy rather than a retry strategy.
 
-The failure fan-out tests verify that every member of a coalesced group receives the same synthetic leader failure, failures remain isolated by key, missing or empty failures fail closed, and followers cannot supply independent failure outcomes. Failure propagation preserves the original modeled origin-load count rather than implying follower retries.
-
-The `origin_loads` and `avoided_origin_loads` values are counts derived from this deterministic model. They are not throughput, latency, or production measurements.
+The `origin_loads` and `avoided_origin_loads` values are counts derived from this deterministic model. Timeout values are synthetic policy inputs. None of these values are throughput, latency, or production measurements.
 
 ## Limitations
 
-This slice does not execute concurrent work, cache values beyond the supplied batch, enforce timeouts, retry failed leaders, elect replacement leaders, or coordinate across processes. Success and failure fan-out are deterministic outcome models; they do not imply a production single-flight implementation.
+This lab does not execute concurrent work, cache values beyond the supplied batch, measure elapsed time, cancel real I/O, retry failed or timed-out leaders, elect replacement leaders, or coordinate across processes. Success, failure, and timeout fan-out are deterministic outcome models; they do not imply a production single-flight implementation.
 
 ## Next experiment
 
-A useful next slice can model a bounded leader timeout and make the retry policy explicit, including whether followers receive the timeout as a shared terminal outcome or a single replacement leader is elected without allowing a retry stampede.
+The current model now covers leader election plus shared success, failure, and terminal-timeout outcomes. A later slice could explore controlled replacement-leader election, but only if it can preserve the one-retry boundary without allowing followers to create a retry stampede.
