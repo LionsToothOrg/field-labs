@@ -20,19 +20,17 @@ This lab models the decision boundary only. Cache values, timestamps, durations,
 - a missing entry is a `miss`;
 - invalid timestamps, TTLs, stale budgets, empty values, and clocks preceding storage time fail closed.
 
-`apply_revalidation_outcome` then models one explicit refresh result for an expired entry:
+`apply_revalidation_outcome` models one explicit refresh result for an expired entry. Success requires a new non-empty synthetic value. Failure preserves the original value only while its original maximum-stale budget remains valid.
 
-- a successful refresh requires a new non-empty synthetic value and returns it as fresh at the supplied clock time;
-- a failed refresh preserves the stale value only while the original entry is still inside its maximum-stale budget;
-- once that budget is exceeded, a failed refresh returns a miss and withholds the old value rather than extending its lifetime;
-- contradictory outcomes, such as a failed refresh carrying a replacement value, fail validation.
+`plan_stale_refreshes` elects the first request for each stale key as refresh leader. Later same-key readers become followers, while different keys remain independent.
 
-`plan_stale_refreshes` models refresh deduplication for a batch of stale readers:
+`complete_stale_refreshes` connects that plan to one completion per elected leader:
 
-- the first request for each stale cache key becomes the synthetic refresh leader;
-- later requests for that key become followers rather than additional origin refreshes;
-- different cache keys elect independent leaders;
-- fresh entries, misses, missing key mappings, duplicate request identifiers, and malformed requests fail validation rather than being treated as refresh work.
+- a leader success is delivered as the same fresh replacement to the leader and all followers;
+- a leader failure is delivered as the same bounded stale result to the whole group;
+- if completion occurs after the original maximum-stale boundary, every reader receives a miss and the old value is withheld;
+- completion mappings must match elected leaders exactly, preventing followers or unknown request IDs from injecting independent outcomes;
+- separate keys retain independent completion results.
 
 Run the lab with:
 
@@ -42,14 +40,14 @@ PYTHONPATH=labs/18-stale-cache-fallback python -m unittest discover -s labs/18-s
 
 ## Evidence
 
-The automated tests cover fresh and TTL boundaries, bounded stale delivery, the maximum-stale boundary, rejection beyond the stale budget, missing entries, a zero stale budget, invalid inputs, clock ordering, successful refresh replacement, failed refresh behavior on both sides of the stale boundary, contradictory revalidation inputs, same-key refresh deduplication, independent leaders across keys, non-stale rejection, duplicate request identifiers, and empty refresh batches.
+Automated tests cover freshness boundaries, bounded stale delivery, revalidation success and failure, refresh deduplication, and shared completion. Shared-completion cases verify success fan-out, failure fan-out on both sides of the stale boundary, per-key isolation, exact leader matching, malformed completion rejection, missing entries, and an empty plan.
 
 The `age_ms`, `ttl_ms`, `max_stale_ms`, and `origin_refresh_count` values are deterministic model inputs or calculations. They are not latency, throughput, or production cache measurements. Revalidation outcomes and refresh requests are synthetic state transitions, not observations of an origin service.
 
 ## Limitations
 
-This slice does not contact an origin, perform asynchronous revalidation, coordinate locks across threads or processes, model cache eviction, validate domain-specific data freshness, or execute follower wake-up after a leader completes. The refresh plan demonstrates deterministic leader election and bounded origin-work intent only; it does not claim production single-flight behavior.
+This lab does not contact an origin, perform asynchronous revalidation, coordinate locks across threads or processes, model cache eviction, validate domain-specific freshness, or implement real follower wake-up. The refresh plan and completion fan-out are deterministic state models; they do not claim production single-flight behavior or measured performance.
 
 ## Next experiment
 
-A later slice could connect the refresh plan to revalidation completion so followers observe one shared success or failure while the original maximum-stale boundary remains authoritative.
+A later slice could model cancellation or timeout while followers await a refresh leader, while keeping the maximum-stale boundary authoritative.

@@ -47,6 +47,20 @@ class RefreshPlan:
     origin_refresh_count: int
 
 
+@dataclass(frozen=True)
+class RefreshCompletion:
+    outcome: RevalidationOutcome
+    refreshed_value: str | None = None
+
+
+@dataclass(frozen=True)
+class RefreshDelivery:
+    request_id: str
+    cache_key: str
+    leader_request_id: str
+    result: CacheResult
+
+
 def evaluate_cache_entry(
     entry: CacheEntry | None,
     *,
@@ -158,3 +172,47 @@ def plan_stale_refreshes(
         for cache_key, request_ids in grouped_request_ids.items()
     )
     return RefreshPlan(groups=groups, origin_refresh_count=len(groups))
+
+
+def complete_stale_refreshes(
+    plan: RefreshPlan,
+    *,
+    entries_by_key: dict[str, CacheEntry],
+    completions_by_leader: dict[str, RefreshCompletion],
+    now_ms: int,
+    max_stale_ms: int,
+) -> tuple[RefreshDelivery, ...]:
+    """Fan one validated leader completion out to every reader in each refresh group."""
+    if not isinstance(plan, RefreshPlan):
+        raise ValueError("plan must be a RefreshPlan")
+
+    expected_leaders = {group.leader_request_id for group in plan.groups}
+    if set(completions_by_leader) != expected_leaders:
+        raise ValueError("completions must match refresh leaders exactly")
+
+    deliveries: list[RefreshDelivery] = []
+    for group in plan.groups:
+        if group.cache_key not in entries_by_key:
+            raise ValueError("every refresh group must have an explicit cache entry")
+        completion = completions_by_leader[group.leader_request_id]
+        if not isinstance(completion, RefreshCompletion):
+            raise ValueError("completions must contain RefreshCompletion values")
+
+        result = apply_revalidation_outcome(
+            entries_by_key[group.cache_key],
+            outcome=completion.outcome,
+            now_ms=now_ms,
+            max_stale_ms=max_stale_ms,
+            refreshed_value=completion.refreshed_value,
+        )
+        for request_id in (group.leader_request_id, *group.follower_request_ids):
+            deliveries.append(
+                RefreshDelivery(
+                    request_id=request_id,
+                    cache_key=group.cache_key,
+                    leader_request_id=group.leader_request_id,
+                    result=result,
+                )
+            )
+
+    return tuple(deliveries)
