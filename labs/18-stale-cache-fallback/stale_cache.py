@@ -8,6 +8,11 @@ class CacheDecision(str, Enum):
     MISS = "miss"
 
 
+class RevalidationOutcome(str, Enum):
+    SUCCESS = "success"
+    FAILURE = "failure"
+
+
 @dataclass(frozen=True)
 class CacheEntry:
     value: str
@@ -57,3 +62,35 @@ def evaluate_cache_entry(
         return CacheResult(CacheDecision.STALE, entry.value, age_ms, True)
 
     return CacheResult(CacheDecision.MISS, None, age_ms, False)
+
+
+def apply_revalidation_outcome(
+    entry: CacheEntry,
+    *,
+    outcome: RevalidationOutcome,
+    now_ms: int,
+    max_stale_ms: int,
+    refreshed_value: str | None = None,
+) -> CacheResult:
+    """Apply one synthetic refresh outcome without extending a stale entry's lifetime."""
+    current = evaluate_cache_entry(entry, now_ms=now_ms, max_stale_ms=max_stale_ms)
+
+    if not isinstance(outcome, RevalidationOutcome):
+        raise ValueError("outcome must be a RevalidationOutcome")
+    if current.decision is CacheDecision.FRESH:
+        raise ValueError("revalidation requires an expired cache entry")
+
+    if outcome is RevalidationOutcome.FAILURE:
+        if refreshed_value is not None:
+            raise ValueError("failed revalidation cannot provide a refreshed value")
+        return current
+
+    if not isinstance(refreshed_value, str) or not refreshed_value:
+        raise ValueError("successful revalidation requires a non-empty refreshed value")
+
+    refreshed_entry = CacheEntry(
+        value=refreshed_value,
+        stored_at_ms=now_ms,
+        ttl_ms=entry.ttl_ms,
+    )
+    return evaluate_cache_entry(refreshed_entry, now_ms=now_ms, max_stale_ms=max_stale_ms)
