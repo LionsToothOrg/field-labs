@@ -3,9 +3,11 @@ import unittest
 from stale_cache import (
     CacheDecision,
     CacheEntry,
+    RefreshRequest,
     RevalidationOutcome,
     apply_revalidation_outcome,
     evaluate_cache_entry,
+    plan_stale_refreshes,
 )
 
 
@@ -145,6 +147,74 @@ class StaleCacheFallbackTests(unittest.TestCase):
                 max_stale_ms=300,
                 refreshed_value="synthetic-reading-v2",
             )
+
+    def test_stale_readers_share_one_refresh_per_cache_key(self):
+        plan = plan_stale_refreshes(
+            [
+                RefreshRequest("request-a", "sensor-a"),
+                RefreshRequest("request-b", "sensor-a"),
+                RefreshRequest("request-c", "sensor-a"),
+            ],
+            entries_by_key={"sensor-a": self.entry},
+            now_ms=1_700,
+            max_stale_ms=300,
+        )
+        self.assertEqual(1, plan.origin_refresh_count)
+        self.assertEqual("request-a", plan.groups[0].leader_request_id)
+        self.assertEqual(("request-b", "request-c"), plan.groups[0].follower_request_ids)
+
+    def test_different_stale_keys_elect_independent_refresh_leaders(self):
+        plan = plan_stale_refreshes(
+            [
+                RefreshRequest("request-a", "sensor-a"),
+                RefreshRequest("request-b", "sensor-b"),
+                RefreshRequest("request-c", "sensor-a"),
+            ],
+            entries_by_key={"sensor-a": self.entry, "sensor-b": self.entry},
+            now_ms=1_700,
+            max_stale_ms=300,
+        )
+        self.assertEqual(2, plan.origin_refresh_count)
+        self.assertEqual(("sensor-a", "sensor-b"), tuple(group.cache_key for group in plan.groups))
+        self.assertEqual(("request-c",), plan.groups[0].follower_request_ids)
+        self.assertEqual((), plan.groups[1].follower_request_ids)
+
+    def test_refresh_planning_rejects_non_stale_entries(self):
+        for now_ms in (1_400, 1_801):
+            with self.subTest(now_ms=now_ms):
+                with self.assertRaises(ValueError):
+                    plan_stale_refreshes(
+                        [RefreshRequest("request-a", "sensor-a")],
+                        entries_by_key={"sensor-a": self.entry},
+                        now_ms=now_ms,
+                        max_stale_ms=300,
+                    )
+
+    def test_refresh_planning_rejects_missing_entries_and_duplicate_request_ids(self):
+        with self.assertRaises(ValueError):
+            plan_stale_refreshes(
+                [RefreshRequest("request-a", "sensor-a")],
+                entries_by_key={},
+                now_ms=1_700,
+                max_stale_ms=300,
+            )
+        with self.assertRaises(ValueError):
+            plan_stale_refreshes(
+                [
+                    RefreshRequest("request-a", "sensor-a"),
+                    RefreshRequest("request-a", "sensor-a"),
+                ],
+                entries_by_key={"sensor-a": self.entry},
+                now_ms=1_700,
+                max_stale_ms=300,
+            )
+
+    def test_empty_refresh_batch_has_no_origin_work(self):
+        plan = plan_stale_refreshes(
+            [], entries_by_key={}, now_ms=1_700, max_stale_ms=300
+        )
+        self.assertEqual((), plan.groups)
+        self.assertEqual(0, plan.origin_refresh_count)
 
 
 if __name__ == "__main__":
