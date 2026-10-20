@@ -13,6 +13,11 @@ class RevalidationOutcome(str, Enum):
     FAILURE = "failure"
 
 
+class FollowerExit(str, Enum):
+    TIMEOUT = "timeout"
+    CANCELLED = "cancelled"
+
+
 @dataclass(frozen=True)
 class CacheEntry:
     value: str
@@ -45,6 +50,20 @@ class RefreshGroup:
 class RefreshPlan:
     groups: tuple[RefreshGroup, ...]
     origin_refresh_count: int
+
+
+@dataclass(frozen=True)
+class FollowerDeparture:
+    request_id: str
+    cache_key: str
+    leader_request_id: str
+    reason: FollowerExit
+
+
+@dataclass(frozen=True)
+class RefreshWaitResult:
+    active_plan: RefreshPlan
+    departures: tuple[FollowerDeparture, ...]
 
 
 @dataclass(frozen=True)
@@ -172,6 +191,55 @@ def plan_stale_refreshes(
         for cache_key, request_ids in grouped_request_ids.items()
     )
     return RefreshPlan(groups=groups, origin_refresh_count=len(groups))
+
+
+def apply_follower_exits(
+    plan: RefreshPlan,
+    *,
+    exits_by_request: dict[str, FollowerExit],
+) -> RefreshWaitResult:
+    """Remove timed-out or cancelled followers without changing elected refresh work."""
+    if not isinstance(plan, RefreshPlan):
+        raise ValueError("plan must be a RefreshPlan")
+
+    followers: dict[str, RefreshGroup] = {}
+    leaders = {group.leader_request_id for group in plan.groups}
+    for group in plan.groups:
+        for request_id in group.follower_request_ids:
+            if request_id in followers or request_id in leaders:
+                raise ValueError("refresh plan request identifiers must be unique")
+            followers[request_id] = group
+
+    unknown = set(exits_by_request) - set(followers)
+    if unknown:
+        raise ValueError("only elected followers may exit while awaiting refresh")
+    for reason in exits_by_request.values():
+        if not isinstance(reason, FollowerExit):
+            raise ValueError("follower exits must use FollowerExit values")
+
+    departures = tuple(
+        FollowerDeparture(
+            request_id=request_id,
+            cache_key=followers[request_id].cache_key,
+            leader_request_id=followers[request_id].leader_request_id,
+            reason=reason,
+        )
+        for request_id, reason in exits_by_request.items()
+    )
+    active_groups = tuple(
+        RefreshGroup(
+            cache_key=group.cache_key,
+            leader_request_id=group.leader_request_id,
+            follower_request_ids=tuple(
+                request_id for request_id in group.follower_request_ids if request_id not in exits_by_request
+            ),
+        )
+        for group in plan.groups
+    )
+    return RefreshWaitResult(
+        active_plan=RefreshPlan(groups=active_groups, origin_refresh_count=plan.origin_refresh_count),
+        departures=departures,
+    )
 
 
 def complete_stale_refreshes(
