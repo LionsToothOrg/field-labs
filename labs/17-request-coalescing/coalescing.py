@@ -50,6 +50,20 @@ class FanoutResult:
     origin_loads: int
 
 
+@dataclass(frozen=True)
+class DeliveredFailure:
+    request_id: str
+    key: str
+    error: str
+    source_request_id: str
+
+
+@dataclass(frozen=True)
+class FailureFanoutResult:
+    deliveries: tuple[DeliveredFailure, ...]
+    origin_loads: int
+
+
 def coalesce_requests(requests: Iterable[Request]) -> CoalescingResult:
     """Group a deterministic synthetic arrival batch by resource key.
 
@@ -111,3 +125,43 @@ def fan_out_successes(
             )
 
     return FanoutResult(deliveries=tuple(deliveries), origin_loads=result.origin_loads)
+
+
+def fan_out_failures(
+    result: CoalescingResult,
+    leader_errors: dict[str, str],
+) -> FailureFanoutResult:
+    """Deliver each synthetic leader failure to its whole coalesced group.
+
+    Failures are keyed only by leader request ID. Every group must have one
+    non-empty failure before any delivery is returned, preventing followers
+    from supplying independent outcomes or implying duplicate origin work.
+    """
+    expected_leaders = {group.leader.request_id for group in result.groups}
+    supplied_leaders = set(leader_errors)
+
+    missing = expected_leaders - supplied_leaders
+    unexpected = supplied_leaders - expected_leaders
+    if missing:
+        raise ValueError(f"missing leader failure: {sorted(missing)[0]}")
+    if unexpected:
+        raise ValueError(f"unexpected leader failure: {sorted(unexpected)[0]}")
+
+    empty_errors = sorted(leader_id for leader_id, error in leader_errors.items() if not error)
+    if empty_errors:
+        raise ValueError(f"empty leader failure: {empty_errors[0]}")
+
+    deliveries: list[DeliveredFailure] = []
+    for group in result.groups:
+        error = leader_errors[group.leader.request_id]
+        for request in (group.leader, *group.followers):
+            deliveries.append(
+                DeliveredFailure(
+                    request_id=request.request_id,
+                    key=group.key,
+                    error=error,
+                    source_request_id=group.leader.request_id,
+                )
+            )
+
+    return FailureFanoutResult(deliveries=tuple(deliveries), origin_loads=result.origin_loads)
