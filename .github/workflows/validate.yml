@@ -74,6 +74,9 @@ jobs:
       - name: Run graceful degradation tests
         run: PYTHONPATH=labs/16-graceful-degradation python -m unittest discover -s labs/16-graceful-degradation/tests -v
 
+      - name: Run request coalescing tests
+        run: PYTHONPATH=labs/17-request-coalescing python -m unittest discover -s labs/17-request-coalescing/tests -v
+
       - name: Validate interactive lab bench JavaScript
         run: node --check site/app.js
 
