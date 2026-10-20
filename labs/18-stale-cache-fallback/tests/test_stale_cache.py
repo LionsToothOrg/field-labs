@@ -1,6 +1,12 @@
 import unittest
 
-from stale_cache import CacheDecision, CacheEntry, evaluate_cache_entry
+from stale_cache import (
+    CacheDecision,
+    CacheEntry,
+    RevalidationOutcome,
+    apply_revalidation_outcome,
+    evaluate_cache_entry,
+)
 
 
 class StaleCacheFallbackTests(unittest.TestCase):
@@ -64,6 +70,81 @@ class StaleCacheFallbackTests(unittest.TestCase):
     def test_clock_before_storage_time_is_rejected(self):
         with self.assertRaises(ValueError):
             evaluate_cache_entry(self.entry, now_ms=999, max_stale_ms=300)
+
+    def test_successful_revalidation_replaces_stale_value_as_fresh(self):
+        result = apply_revalidation_outcome(
+            self.entry,
+            outcome=RevalidationOutcome.SUCCESS,
+            now_ms=1_700,
+            max_stale_ms=300,
+            refreshed_value="synthetic-reading-v2",
+        )
+        self.assertEqual(CacheDecision.FRESH, result.decision)
+        self.assertEqual("synthetic-reading-v2", result.value)
+        self.assertEqual(0, result.age_ms)
+        self.assertFalse(result.revalidate)
+
+    def test_failed_revalidation_preserves_stale_value_only_inside_budget(self):
+        result = apply_revalidation_outcome(
+            self.entry,
+            outcome=RevalidationOutcome.FAILURE,
+            now_ms=1_700,
+            max_stale_ms=300,
+        )
+        self.assertEqual(CacheDecision.STALE, result.decision)
+        self.assertEqual("synthetic-reading", result.value)
+        self.assertTrue(result.revalidate)
+
+    def test_failed_revalidation_cannot_extend_value_beyond_stale_budget(self):
+        result = apply_revalidation_outcome(
+            self.entry,
+            outcome=RevalidationOutcome.FAILURE,
+            now_ms=1_801,
+            max_stale_ms=300,
+        )
+        self.assertEqual(CacheDecision.MISS, result.decision)
+        self.assertIsNone(result.value)
+        self.assertFalse(result.revalidate)
+
+    def test_successful_revalidation_requires_a_new_value(self):
+        for refreshed_value in (None, ""):
+            with self.subTest(refreshed_value=refreshed_value):
+                with self.assertRaises(ValueError):
+                    apply_revalidation_outcome(
+                        self.entry,
+                        outcome=RevalidationOutcome.SUCCESS,
+                        now_ms=1_700,
+                        max_stale_ms=300,
+                        refreshed_value=refreshed_value,
+                    )
+
+    def test_failed_revalidation_rejects_a_refreshed_value(self):
+        with self.assertRaises(ValueError):
+            apply_revalidation_outcome(
+                self.entry,
+                outcome=RevalidationOutcome.FAILURE,
+                now_ms=1_700,
+                max_stale_ms=300,
+                refreshed_value="unexpected-value",
+            )
+
+    def test_revalidation_rejects_fresh_entries_and_invalid_outcomes(self):
+        with self.assertRaises(ValueError):
+            apply_revalidation_outcome(
+                self.entry,
+                outcome=RevalidationOutcome.SUCCESS,
+                now_ms=1_400,
+                max_stale_ms=300,
+                refreshed_value="synthetic-reading-v2",
+            )
+        with self.assertRaises(ValueError):
+            apply_revalidation_outcome(
+                self.entry,
+                outcome="success",
+                now_ms=1_700,
+                max_stale_ms=300,
+                refreshed_value="synthetic-reading-v2",
+            )
 
 
 if __name__ == "__main__":
