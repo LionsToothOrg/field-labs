@@ -8,7 +8,7 @@ When several requests in the same synthetic arrival batch need the same resource
 
 A cache miss or other expensive lookup can cause several callers to request the same key at nearly the same time. If every caller starts its own downstream load, identical demand is amplified precisely when the dependency may already be under pressure.
 
-This first slice models that boundary without pretending to implement real concurrency. Requests are fabricated records in a deterministic batch.
+This lab models that boundary without pretending to implement real concurrency. Requests and returned values are fabricated records in a deterministic batch.
 
 ## Experiment
 
@@ -20,6 +20,14 @@ This first slice models that boundary without pretending to implement real concu
 - different keys remain isolated and do not coalesce;
 - duplicate request identifiers and empty identifiers are rejected.
 
+`fan_out_successes` then models successful leader completion:
+
+- exactly one supplied value is accepted for each leader;
+- the leader and all of its followers receive that same value;
+- every delivery records the leader request as its source;
+- follower-supplied independent values are rejected;
+- incomplete leader results are rejected before any deliveries are returned.
+
 Run the lab with:
 
 ```bash
@@ -30,12 +38,14 @@ PYTHONPATH=labs/17-request-coalescing python -m unittest discover -s labs/17-req
 
 The automated tests verify that three requests for one synthetic key produce one modeled origin load and two avoided duplicate loads. They also verify key isolation, deterministic leader/follower ordering, empty batches, and invalid identifier rejection.
 
+The fan-out tests verify that followers receive the leader's synthetic value without introducing additional modeled origin loads, separate keys receive only their own leader values, missing leader results fail closed, and followers cannot inject independent origin values.
+
 The `origin_loads` and `avoided_origin_loads` values are counts derived from this deterministic model. They are not throughput, latency, or production measurements.
 
 ## Limitations
 
-This slice does not execute concurrent work, cache values, propagate leader results, model leader failure, enforce timeouts, or coordinate across processes. It demonstrates only the admission/grouping boundary for a supplied synthetic batch.
+This slice does not execute concurrent work, cache values beyond the supplied batch, model leader failure, enforce timeouts, or coordinate across processes. Result fan-out represents successful leader completion only; it does not imply a production single-flight implementation.
 
 ## Next experiment
 
-A useful next slice can model leader completion and result fan-out so followers receive the same successful value without issuing their own origin load, then make leader failure explicit rather than silently treating coalescing as success.
+A useful next slice can make leader failure explicit and prove that every follower in the affected group observes the same failure outcome without silently retrying duplicate origin work.

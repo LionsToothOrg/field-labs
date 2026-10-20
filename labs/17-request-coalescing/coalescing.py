@@ -36,6 +36,20 @@ class CoalescingResult:
         return self.request_count - self.origin_loads
 
 
+@dataclass(frozen=True)
+class DeliveredResult:
+    request_id: str
+    key: str
+    value: str
+    source_request_id: str
+
+
+@dataclass(frozen=True)
+class FanoutResult:
+    deliveries: tuple[DeliveredResult, ...]
+    origin_loads: int
+
+
 def coalesce_requests(requests: Iterable[Request]) -> CoalescingResult:
     """Group a deterministic synthetic arrival batch by resource key.
 
@@ -61,3 +75,39 @@ def coalesce_requests(requests: Iterable[Request]) -> CoalescingResult:
         for key, members in grouped.items()
     )
     return CoalescingResult(groups=groups)
+
+
+def fan_out_successes(
+    result: CoalescingResult,
+    leader_values: dict[str, str],
+) -> FanoutResult:
+    """Deliver each successful synthetic leader value to its coalesced group.
+
+    Values are keyed by leader request ID so followers cannot accidentally
+    supply independent origin results. Every group must have exactly one
+    supplied leader value before any deliveries are returned.
+    """
+    expected_leaders = {group.leader.request_id for group in result.groups}
+    supplied_leaders = set(leader_values)
+
+    missing = expected_leaders - supplied_leaders
+    unexpected = supplied_leaders - expected_leaders
+    if missing:
+        raise ValueError(f"missing leader value: {sorted(missing)[0]}")
+    if unexpected:
+        raise ValueError(f"unexpected leader value: {sorted(unexpected)[0]}")
+
+    deliveries: list[DeliveredResult] = []
+    for group in result.groups:
+        value = leader_values[group.leader.request_id]
+        for request in (group.leader, *group.followers):
+            deliveries.append(
+                DeliveredResult(
+                    request_id=request.request_id,
+                    key=group.key,
+                    value=value,
+                    source_request_id=group.leader.request_id,
+                )
+            )
+
+    return FanoutResult(deliveries=tuple(deliveries), origin_loads=result.origin_loads)
