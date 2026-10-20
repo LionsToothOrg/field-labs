@@ -80,6 +80,9 @@ jobs:
       - name: Run stale cache fallback tests
         run: PYTHONPATH=labs/18-stale-cache-fallback python -m unittest discover -s labs/18-stale-cache-fallback/tests -v
 
+      - name: Run hedged request admission tests
+        run: PYTHONPATH=labs/19-hedged-requests python -m unittest discover -s labs/19-hedged-requests/tests -v
+
       - name: Validate interactive lab bench JavaScript
         run: node --check site/app.js
 
