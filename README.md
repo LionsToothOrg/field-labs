@@ -52,7 +52,7 @@ A useful Field Lab has a narrow question, a reproducible baseline, an intentiona
 
 # ⌬ THE LAB BENCH
 
-All fifteen current labs have implemented slices. Their individual READMEs define the evidence, scope, and limitations for each experiment.
+All seventeen current labs have implemented slices. Their individual READMEs define the evidence, scope, and limitations for each experiment.
 
 | ID | Experiment | Engineering focus |
 | :-- | :-- | :-- |
@@ -71,6 +71,8 @@ All fifteen current labs have implemented slices. Their individual READMEs defin
 | **[13](labs/13-request-deadline-budgeting/)** | **Request Deadline Budgeting** | End-to-end deadlines, downstream timeout bounds, and reserved completion time |
 | **[14](labs/14-cooperative-cancellation/)** | **Cooperative Cancellation** | Cancellation propagation, abandoned work, and bounded detection delay |
 | **[15](labs/15-load-shedding/)** | **Load Shedding Under Saturation** | Bounded admission, queue capacity, and overload rejection |
+| **[16](labs/16-graceful-degradation/)** | **Graceful Degradation** | Required dependencies, optional capabilities, and reduced response modes |
+| **[17](labs/17-request-coalescing/)** | **Request Coalescing** | Duplicate in-flight demand and bounded downstream work |
 
 [**BROWSE THE FULL LAB CATALOG →**](labs/)
 
