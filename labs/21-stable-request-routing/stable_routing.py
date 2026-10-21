@@ -56,6 +56,20 @@ class OwnershipDistribution:
         return self.max_count - self.min_count
 
 
+@dataclass(frozen=True)
+class OwnershipTransition:
+    """Ownership deltas across two synthetic membership snapshots."""
+
+    total_keys: int
+    before: OwnershipDistribution
+    after: OwnershipDistribution
+    deltas: tuple[tuple[str, int], ...]
+
+    @property
+    def delta_counts(self) -> dict[str, int]:
+        return dict(self.deltas)
+
+
 def _validate_key(key: str) -> None:
     if not isinstance(key, str) or not key:
         raise ValueError("key must be a non-empty string")
@@ -134,3 +148,28 @@ def measure_ownership_distribution(
 
     ownership = tuple(sorted(counts.items()))
     return OwnershipDistribution(total_keys=len(normalized_keys), ownership=ownership)
+
+
+def compare_ownership_snapshots(
+    keys: Iterable[str],
+    before_nodes: Iterable[Node],
+    after_nodes: Iterable[Node],
+) -> OwnershipTransition:
+    """Compare ownership counts across two complete synthetic memberships."""
+
+    normalized_keys = _normalize_keys(keys)
+    before = measure_ownership_distribution(normalized_keys, before_nodes)
+    after = measure_ownership_distribution(normalized_keys, after_nodes)
+    before_counts = before.counts
+    after_counts = after.counts
+    names = sorted(set(before_counts) | set(after_counts))
+    deltas = tuple(
+        (name, after_counts.get(name, 0) - before_counts.get(name, 0))
+        for name in names
+    )
+    return OwnershipTransition(
+        total_keys=len(normalized_keys),
+        before=before,
+        after=after,
+        deltas=deltas,
+    )

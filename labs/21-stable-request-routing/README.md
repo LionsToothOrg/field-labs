@@ -29,6 +29,12 @@ For the checked-in corpus of 100 fabricated keys (`item-000` through `item-099`)
 
 For the checked-in 100-key corpus and the original three fabricated nodes, ownership is `node-a: 38`, `node-b: 32`, and `node-c: 30`, for a count spread of `8`. Those values are deterministic observations for this corpus and hash function only. They are not throughput, capacity, utilization, latency, or statistical-uniformity measurements.
 
+## Fourth slice: ownership changes across membership
+
+`compare_ownership_snapshots` measures before/after ownership counts over the same explicit corpus and reports a signed delta for every node present in either membership. This makes the count-level effect of a membership change inspectable without hiding added or removed members.
+
+For the checked-in 100-key corpus, adding fabricated `node-d` changes ownership from `38/32/30` to `32/25/24/19`. The corresponding deltas are `node-a: -6`, `node-b: -7`, `node-c: -6`, and `node-d: +19`; they sum to zero because the corpus size is unchanged. These are deterministic corpus-specific observations, not capacity or production-load measurements.
+
 ## Reproduce
 
 ```bash
@@ -36,14 +42,14 @@ PYTHONPATH=labs/21-stable-request-routing \
   python -m unittest discover -s labs/21-stable-request-routing/tests -v
 ```
 
-The focused suite checks deterministic selection, node-order independence, single-node routing, add/remove membership behavior, exact transition measurement, exact ownership counts over the fixed fabricated corpus, zero-ownership visibility, and invalid input handling.
+The focused suite checks deterministic selection, node-order independence, single-node routing, add/remove membership behavior, exact transition measurement, exact ownership counts, before/after ownership deltas over the fixed fabricated corpus, zero-ownership visibility, and invalid input handling.
 
 ## What this evidence supports
 
-The tests demonstrate deterministic routing, inspectable membership movement, and inspectable ownership counts for the synthetic cases exercised by the suite. The measured movement ratio and ownership counts describe only the checked-in fabricated corpus. They do not demonstrate production traffic balance, latency, failure detection, replication, availability, persistence, weighted capacity, utilization, or coordination between processes.
+The tests demonstrate deterministic routing, inspectable membership movement, ownership counts, and ownership deltas for the synthetic cases exercised by the suite. All measured values describe only the checked-in fabricated corpus. They do not demonstrate production traffic balance, latency, failure detection, replication, availability, persistence, weighted capacity, utilization, or coordination between processes.
 
-## Next experiment
+## Stopping point
 
-A later slice can compare ownership snapshots across a membership transition or add weighted synthetic capacity while keeping corpus-specific observations clearly separate from production claims.
+Lab 21 now covers deterministic rendezvous routing, measurable membership churn, ownership distribution, and ownership deltas across a membership transition. Weighted capacity, failure detection, replication, and live traffic behavior are intentionally left outside this lab so the evidence stays bounded to the deterministic synthetic model.
 
 All identifiers and request keys in this lab are fabricated for the experiment.
