@@ -22,6 +22,7 @@ This directory is the current index of implemented Field Labs. Each lab is a sel
 | [16](16-graceful-degradation/) | Graceful Degradation | Required dependencies, optional capabilities, and reduced response modes |
 | [17](17-request-coalescing/) | Request Coalescing | Duplicate in-flight demand and bounded downstream work |
 | [18](18-stale-cache-fallback/) | Stale Cache Fallback | Freshness boundaries, bounded stale delivery, and revalidation intent |
+| [19](19-hedged-requests/) | Hedged Requests | Bounded duplicate admission, race outcomes, and timeline consistency |
 
 ## Reading the labs
 
