@@ -32,6 +32,30 @@ class MembershipTransition:
         return self.moved_count / self.total_keys
 
 
+@dataclass(frozen=True)
+class OwnershipDistribution:
+    """Inspectable ownership counts for one synthetic routing snapshot."""
+
+    total_keys: int
+    ownership: tuple[tuple[str, int], ...]
+
+    @property
+    def counts(self) -> dict[str, int]:
+        return dict(self.ownership)
+
+    @property
+    def min_count(self) -> int:
+        return min(count for _, count in self.ownership)
+
+    @property
+    def max_count(self) -> int:
+        return max(count for _, count in self.ownership)
+
+    @property
+    def spread(self) -> int:
+        return self.max_count - self.min_count
+
+
 def _validate_key(key: str) -> None:
     if not isinstance(key, str) or not key:
         raise ValueError("key must be a non-empty string")
@@ -94,3 +118,19 @@ def measure_membership_transition(
         key for key in normalized_keys if route(key, before) != route(key, after)
     )
     return MembershipTransition(total_keys=len(normalized_keys), moved_keys=moved)
+
+
+def measure_ownership_distribution(
+    keys: Iterable[str],
+    nodes: Iterable[Node],
+) -> OwnershipDistribution:
+    """Count synthetic key ownership for one complete membership snapshot."""
+
+    normalized_keys = _normalize_keys(keys)
+    normalized_nodes = _normalize_nodes(nodes)
+    counts = {node.name: 0 for node in normalized_nodes}
+    for key in normalized_keys:
+        counts[route(key, normalized_nodes).name] += 1
+
+    ownership = tuple(sorted(counts.items()))
+    return OwnershipDistribution(total_keys=len(normalized_keys), ownership=ownership)
