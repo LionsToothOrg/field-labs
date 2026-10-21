@@ -1,6 +1,11 @@
 import unittest
 
-from stable_routing import Node, rendezvous_score, route
+from stable_routing import (
+    Node,
+    measure_membership_transition,
+    rendezvous_score,
+    route,
+)
 
 
 class StableRoutingTests(unittest.TestCase):
@@ -40,6 +45,41 @@ class StableRoutingTests(unittest.TestCase):
 
         self.assertTrue(moved, "synthetic corpus should exercise at least one move")
         self.assertTrue(all(before[key] == removed.name for key in moved))
+
+    def test_transition_measurement_reports_exact_synthetic_movement(self) -> None:
+        added = Node("node-d")
+        report = measure_membership_transition(
+            self.keys,
+            self.nodes,
+            self.nodes + (added,),
+        )
+
+        self.assertEqual(report.total_keys, 100)
+        self.assertEqual(report.moved_count, 19)
+        self.assertEqual(report.movement_ratio, 0.19)
+        self.assertTrue(
+            all(route(key, self.nodes + (added,)) == added for key in report.moved_keys)
+        )
+
+    def test_transition_measurement_is_zero_for_unchanged_membership(self) -> None:
+        report = measure_membership_transition(
+            self.keys,
+            self.nodes,
+            reversed(self.nodes),
+        )
+
+        self.assertEqual(report.moved_keys, ())
+        self.assertEqual(report.movement_ratio, 0.0)
+
+    def test_transition_measurement_rejects_ambiguous_key_corpora(self) -> None:
+        with self.assertRaises(ValueError):
+            measure_membership_transition((), self.nodes, self.nodes)
+        with self.assertRaises(ValueError):
+            measure_membership_transition(
+                ("item-001", "item-001"),
+                self.nodes,
+                self.nodes,
+            )
 
     def test_score_is_stable_for_same_key_and_node(self) -> None:
         node = Node("node-a")
