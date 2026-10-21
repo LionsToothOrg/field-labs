@@ -1,6 +1,6 @@
 import unittest
 
-from hedged_requests import Request, plan_hedge
+from hedged_requests import HedgeDecision, Request, plan_hedge, resolve_race
 
 
 class HedgeAdmissionTests(unittest.TestCase):
@@ -47,6 +47,64 @@ class HedgeAdmissionTests(unittest.TestCase):
     def test_non_positive_threshold_is_rejected(self):
         with self.assertRaisesRegex(ValueError, "hedge_after_ms"):
             plan_hedge(Request("req-threshold", "GET", 10, 0))
+
+
+class HedgeRaceTests(unittest.TestCase):
+    def test_primary_wins_admitted_race(self):
+        decision = plan_hedge(Request("req-primary-win", "GET", 90, 50))
+        outcome = resolve_race(decision, primary_completed_at_ms=90, hedge_completed_at_ms=110)
+
+        self.assertEqual("primary", outcome.winner)
+        self.assertEqual("hedge", outcome.loser)
+        self.assertEqual(90, outcome.completed_at_ms)
+        self.assertTrue(outcome.cancellation_requested)
+        self.assertTrue(outcome.loser_work_may_have_started)
+
+    def test_hedge_wins_admitted_race(self):
+        decision = plan_hedge(Request("req-hedge-win", "GET", 140, 50))
+        outcome = resolve_race(decision, primary_completed_at_ms=140, hedge_completed_at_ms=85)
+
+        self.assertEqual("hedge", outcome.winner)
+        self.assertEqual("primary", outcome.loser)
+        self.assertEqual(85, outcome.completed_at_ms)
+        self.assertTrue(outcome.cancellation_requested)
+        self.assertTrue(outcome.loser_work_may_have_started)
+
+    def test_equal_completion_times_choose_primary_deterministically(self):
+        decision = plan_hedge(Request("req-tie", "GET", 100, 50))
+        outcome = resolve_race(decision, primary_completed_at_ms=100, hedge_completed_at_ms=100)
+
+        self.assertEqual("primary", outcome.winner)
+        self.assertEqual("hedge", outcome.loser)
+
+    def test_non_hedged_request_has_no_loser_or_cancellation(self):
+        decision = plan_hedge(Request("req-single", "GET", 40, 50))
+        outcome = resolve_race(decision, primary_completed_at_ms=40)
+
+        self.assertEqual("primary", outcome.winner)
+        self.assertIsNone(outcome.loser)
+        self.assertFalse(outcome.cancellation_requested)
+        self.assertFalse(outcome.loser_work_may_have_started)
+
+    def test_non_hedged_request_rejects_hedge_completion(self):
+        decision = plan_hedge(Request("req-extra", "POST", 100, 50))
+        with self.assertRaisesRegex(ValueError, "admitted hedge"):
+            resolve_race(decision, primary_completed_at_ms=100, hedge_completed_at_ms=80)
+
+    def test_admitted_hedge_requires_hedge_completion(self):
+        decision = plan_hedge(Request("req-missing", "GET", 100, 50))
+        with self.assertRaisesRegex(ValueError, "required"):
+            resolve_race(decision, primary_completed_at_ms=100)
+
+    def test_negative_completion_time_is_rejected(self):
+        decision = plan_hedge(Request("req-negative", "GET", 100, 50))
+        with self.assertRaisesRegex(ValueError, "primary_completed_at_ms"):
+            resolve_race(decision, primary_completed_at_ms=-1, hedge_completed_at_ms=80)
+
+    def test_inconsistent_attempt_count_is_rejected(self):
+        decision = HedgeDecision("req-invalid", True, 1, "hedge_started")
+        with self.assertRaisesRegex(ValueError, "two attempts"):
+            resolve_race(decision, primary_completed_at_ms=100, hedge_completed_at_ms=80)
 
 
 if __name__ == "__main__":
