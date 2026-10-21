@@ -25,6 +25,12 @@ An explicit overload signal anywhere in the window causes a decrease. Otherwise,
 
 This makes the experiment's aggregation boundary explicit: an isolated slow sample does not automatically force a decrease when the complete window remains healthy, while an overload signal is never averaged away.
 
+## Third slice: sequential controller state
+
+`run_feedback_trace` applies complete feedback windows in order and carries each decision's next limit into the following window. The returned `ControllerTrace` records the initial limit, final limit, and immutable decision sequence so a fabricated adaptation trace can be inspected without hidden state.
+
+The trace uses the same validation and min/max bounds as an individual window. Empty traces and malformed windows fail explicitly rather than producing partial evidence. This slice demonstrates deterministic state propagation only; it does not introduce time, concurrency, or live traffic.
+
 ## Reproduce
 
 ```bash
@@ -32,14 +38,14 @@ PYTHONPATH=labs/20-adaptive-concurrency-limits \
   python -m unittest discover -s labs/20-adaptive-concurrency-limits/tests -v
 ```
 
-The focused suite covers single-sample bounded feedback plus healthy and degraded windows, the exact target boundary, isolated slow observations, overload precedence, empty windows, and inconsistent targets.
+The focused suite covers single-sample bounded feedback, healthy and degraded windows, overload precedence, sequential state propagation, repeated maximum clamping, and invalid trace/window inputs.
 
 ## What this evidence supports
 
-The tests demonstrate deterministic behavior for these synthetic control rules and their bounds. They do not demonstrate that the constants, arithmetic mean, or any particular window size are appropriate for a real workload, or that the model improves production latency or throughput.
+The tests demonstrate deterministic behavior for these synthetic control rules, bounds, and sequential state transitions. They do not demonstrate that the constants, arithmetic mean, window size, or resulting limit path are appropriate for a real workload, or that the model improves production latency or throughput.
 
 ## Limitations and next experiments
 
-This lab still does **not** model asynchronous requests, rolling/time-based windows, percentile estimation, minimum RTT, queueing delay, sample weighting, oscillation damping, distributed coordination, retries, cancellation, or downstream capacity. A later slice can model sequential windows and explicit controller state before making any claim about adaptation across a synthetic trace.
+This lab still does **not** model asynchronous requests, rolling/time-based windows, percentile estimation, minimum RTT, queueing delay, sample weighting, oscillation damping, distributed coordination, retries, cancellation, or downstream capacity. A later slice can examine oscillation or stabilization semantics on a bounded synthetic trace before any claim about real adaptive behavior is warranted.
 
 All identifiers and measurements in this lab are fabricated for the experiment.
