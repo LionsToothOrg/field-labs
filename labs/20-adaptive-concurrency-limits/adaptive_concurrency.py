@@ -10,6 +10,7 @@ class LimitPolicy:
     maximum: int
     increase_by: int = 1
     decrease_ratio: float = 0.5
+    latency_tolerance_ms: int = 0
 
     def __post_init__(self) -> None:
         if self.minimum < 1:
@@ -20,6 +21,8 @@ class LimitPolicy:
             raise ValueError("increase_by must be at least 1")
         if not 0 < self.decrease_ratio < 1:
             raise ValueError("decrease_ratio must be between 0 and 1")
+        if self.latency_tolerance_ms < 0:
+            raise ValueError("latency_tolerance_ms must be non-negative")
 
 
 @dataclass(frozen=True)
@@ -66,14 +69,20 @@ def update_limit(current_limit: int, sample: Sample, policy: LimitPolicy) -> Lim
     """Update a bounded limit from one synthetic feedback sample."""
     _validate_current_limit(current_limit, policy)
 
-    if sample.overloaded or sample.latency_ms > sample.target_latency_ms:
-        next_limit = _decrease(current_limit, policy)
-        reason = "overload" if sample.overloaded else "latency_above_target"
-    else:
-        next_limit = _increase(current_limit, policy)
-        reason = "healthy"
+    if sample.overloaded:
+        return LimitDecision(current_limit, _decrease(current_limit, policy), "overload")
 
-    return LimitDecision(current_limit, next_limit, reason)
+    if policy.latency_tolerance_ms:
+        lower = sample.target_latency_ms - policy.latency_tolerance_ms
+        upper = sample.target_latency_ms + policy.latency_tolerance_ms
+        if lower <= sample.latency_ms <= upper:
+            return LimitDecision(current_limit, current_limit, "within_tolerance")
+        if sample.latency_ms > upper:
+            return LimitDecision(current_limit, _decrease(current_limit, policy), "latency_above_target")
+    elif sample.latency_ms > sample.target_latency_ms:
+        return LimitDecision(current_limit, _decrease(current_limit, policy), "latency_above_target")
+
+    return LimitDecision(current_limit, _increase(current_limit, policy), "healthy")
 
 
 def update_limit_from_window(
@@ -83,7 +92,7 @@ def update_limit_from_window(
 
     All samples must use the same target. Any explicit overload signal wins over
     latency aggregation. Otherwise the arithmetic mean latency is compared with
-    the shared target without rounding.
+    the shared target and optional tolerance without rounding.
     """
     _validate_current_limit(current_limit, policy)
     if not samples:
@@ -97,7 +106,17 @@ def update_limit_from_window(
         return LimitDecision(current_limit, _decrease(current_limit, policy), "window_overload")
 
     total_latency = sum(sample.latency_ms for sample in samples)
-    if total_latency > target * len(samples):
+    sample_count = len(samples)
+    if policy.latency_tolerance_ms:
+        lower_total = (target - policy.latency_tolerance_ms) * sample_count
+        upper_total = (target + policy.latency_tolerance_ms) * sample_count
+        if lower_total <= total_latency <= upper_total:
+            return LimitDecision(current_limit, current_limit, "window_within_tolerance")
+        if total_latency > upper_total:
+            return LimitDecision(
+                current_limit, _decrease(current_limit, policy), "window_latency_above_target"
+            )
+    elif total_latency > target * sample_count:
         return LimitDecision(
             current_limit, _decrease(current_limit, policy), "window_latency_above_target"
         )

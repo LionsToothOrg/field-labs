@@ -31,6 +31,12 @@ This makes the experiment's aggregation boundary explicit: an isolated slow samp
 
 The trace uses the same validation and min/max bounds as an individual window. Empty traces and malformed windows fail explicitly rather than producing partial evidence. This slice demonstrates deterministic state propagation only; it does not introduce time, concurrency, or live traffic.
 
+## Fourth slice: bounded stabilization
+
+`LimitPolicy.latency_tolerance_ms` adds an optional deadband around the synthetic latency target. With a positive tolerance, a sample or complete window whose latency remains inside the inclusive band holds the current limit instead of immediately increasing or decreasing it. Measurements outside the band retain the existing additive-increase/multiplicative-decrease behavior, and explicit overload still forces a decrease even inside the band.
+
+A tolerance of zero preserves the earlier controller semantics. The tolerance is a deliberately simple stabilization mechanism for the experiment; its value is not a recommended production setting.
+
 ## Reproduce
 
 ```bash
@@ -38,14 +44,14 @@ PYTHONPATH=labs/20-adaptive-concurrency-limits \
   python -m unittest discover -s labs/20-adaptive-concurrency-limits/tests -v
 ```
 
-The focused suite covers single-sample bounded feedback, healthy and degraded windows, overload precedence, sequential state propagation, repeated maximum clamping, and invalid trace/window inputs.
+The focused suite covers single-sample bounded feedback, healthy and degraded windows, overload precedence, sequential state propagation, repeated maximum clamping, tolerance boundaries, bounded stabilization, and invalid trace/window/policy inputs.
 
 ## What this evidence supports
 
-The tests demonstrate deterministic behavior for these synthetic control rules, bounds, and sequential state transitions. They do not demonstrate that the constants, arithmetic mean, window size, or resulting limit path are appropriate for a real workload, or that the model improves production latency or throughput.
+The tests demonstrate deterministic behavior for these synthetic control rules, bounds, sequential state transitions, and configured tolerance semantics. They do not demonstrate that the constants, arithmetic mean, window size, tolerance, or resulting limit path are appropriate for a real workload, or that the model improves production latency or throughput.
 
-## Limitations and next experiments
+## Stopping point
 
-This lab still does **not** model asynchronous requests, rolling/time-based windows, percentile estimation, minimum RTT, queueing delay, sample weighting, oscillation damping, distributed coordination, retries, cancellation, or downstream capacity. A later slice can examine oscillation or stabilization semantics on a bounded synthetic trace before any claim about real adaptive behavior is warranted.
+Lab 20 now covers bounded admission, explicit feedback, complete-window aggregation, sequential controller state, and an optional stabilization band. That is a useful boundary for this deterministic experiment. Live asynchronous traffic, rolling/time-based windows, percentile estimation, minimum RTT, queueing delay, sample weighting, distributed coordination, retries, cancellation, and downstream capacity belong in separate experiments rather than being implied by this model.
 
 All identifiers and measurements in this lab are fabricated for the experiment.
