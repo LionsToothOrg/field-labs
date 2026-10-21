@@ -3,6 +3,7 @@ import unittest
 from stable_routing import (
     Node,
     measure_membership_transition,
+    measure_ownership_distribution,
     rendezvous_score,
     route,
 )
@@ -81,6 +82,35 @@ class StableRoutingTests(unittest.TestCase):
                 self.nodes,
             )
 
+    def test_distribution_reports_exact_synthetic_ownership(self) -> None:
+        report = measure_ownership_distribution(self.keys, self.nodes)
+
+        self.assertEqual(report.total_keys, 100)
+        self.assertEqual(
+            report.ownership,
+            (("node-a", 38), ("node-b", 32), ("node-c", 30)),
+        )
+        self.assertEqual(report.min_count, 30)
+        self.assertEqual(report.max_count, 38)
+        self.assertEqual(report.spread, 8)
+
+    def test_distribution_includes_nodes_with_zero_owned_keys(self) -> None:
+        report = measure_ownership_distribution(
+            ("item-001",),
+            self.nodes,
+        )
+
+        self.assertEqual(report.total_keys, 1)
+        self.assertEqual(sum(report.counts.values()), 1)
+        self.assertEqual(set(report.counts), {"node-a", "node-b", "node-c"})
+        self.assertEqual(sum(count == 0 for count in report.counts.values()), 2)
+
+    def test_distribution_is_independent_of_node_order(self) -> None:
+        forward = measure_ownership_distribution(self.keys, self.nodes)
+        reversed_order = measure_ownership_distribution(self.keys, reversed(self.nodes))
+
+        self.assertEqual(forward, reversed_order)
+
     def test_score_is_stable_for_same_key_and_node(self) -> None:
         node = Node("node-a")
         self.assertEqual(
@@ -99,6 +129,8 @@ class StableRoutingTests(unittest.TestCase):
             route("item-001", (Node("node-a"), Node("node-a")))
         with self.assertRaises(TypeError):
             route("item-001", (Node("node-a"), "node-b"))
+        with self.assertRaises(ValueError):
+            measure_ownership_distribution((), self.nodes)
 
 
 if __name__ == "__main__":
