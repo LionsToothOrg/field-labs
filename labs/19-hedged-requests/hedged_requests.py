@@ -19,6 +19,7 @@ class HedgeDecision:
     hedge_started: bool
     attempt_count: int
     reason: Literal["primary_completed", "hedge_started", "unsafe_method"]
+    hedge_started_at_ms: int | None
 
 
 @dataclass(frozen=True)
@@ -62,12 +63,27 @@ def plan_hedge(request: Request) -> HedgeDecision:
         raise ValueError("method must be non-empty")
 
     if request.primary_latency_ms <= request.hedge_after_ms:
-        return HedgeDecision(request.request_id, False, 1, "primary_completed")
+        return HedgeDecision(request.request_id, False, 1, "primary_completed", None)
 
     if method not in SAFE_METHODS:
-        return HedgeDecision(request.request_id, False, 1, "unsafe_method")
+        return HedgeDecision(request.request_id, False, 1, "unsafe_method", None)
 
-    return HedgeDecision(request.request_id, True, 2, "hedge_started")
+    return HedgeDecision(
+        request.request_id, True, 2, "hedge_started", request.hedge_after_ms
+    )
+
+
+def _validate_hedged_timeline(
+    decision: HedgeDecision,
+    primary_completed_at_ms: int,
+    hedge_completed_at_ms: int,
+) -> None:
+    if decision.hedge_started_at_ms is None or decision.hedge_started_at_ms < 0:
+        raise ValueError("hedged decisions require a valid hedge start time")
+    if primary_completed_at_ms <= decision.hedge_started_at_ms:
+        raise ValueError("primary completion must occur after hedge admission")
+    if hedge_completed_at_ms < decision.hedge_started_at_ms:
+        raise ValueError("hedge completion cannot occur before hedge admission")
 
 
 def resolve_race(
@@ -82,6 +98,8 @@ def resolve_race(
     if not decision.hedge_started:
         if decision.attempt_count != 1:
             raise ValueError("non-hedged decisions must have one attempt")
+        if decision.hedge_started_at_ms is not None:
+            raise ValueError("non-hedged decisions cannot have a hedge start time")
         if hedge_completed_at_ms is not None:
             raise ValueError("hedge completion requires an admitted hedge")
         return RaceOutcome(
@@ -94,6 +112,9 @@ def resolve_race(
         raise ValueError("hedge_completed_at_ms is required for an admitted hedge")
     if hedge_completed_at_ms < 0:
         raise ValueError("hedge_completed_at_ms must be >= 0")
+    _validate_hedged_timeline(
+        decision, primary_completed_at_ms, hedge_completed_at_ms
+    )
 
     if primary_completed_at_ms <= hedge_completed_at_ms:
         winner, loser, completed_at_ms = "primary", "hedge", primary_completed_at_ms
@@ -117,6 +138,8 @@ def resolve_acceptable_race(
     if not decision.hedge_started:
         if decision.attempt_count != 1:
             raise ValueError("non-hedged decisions must have one attempt")
+        if decision.hedge_started_at_ms is not None:
+            raise ValueError("non-hedged decisions cannot have a hedge start time")
         if hedge is not None:
             raise ValueError("hedge completion requires an admitted hedge")
         return AcceptableRaceOutcome(
@@ -135,6 +158,9 @@ def resolve_acceptable_race(
         raise ValueError("hedge completion is required for an admitted hedge")
     if hedge.completed_at_ms < 0:
         raise ValueError("hedge completion time must be >= 0")
+    _validate_hedged_timeline(
+        decision, primary.completed_at_ms, hedge.completed_at_ms
+    )
 
     attempts = [("primary", primary), ("hedge", hedge)]
     attempts.sort(key=lambda item: (item[1].completed_at_ms, item[0] != "primary"))
