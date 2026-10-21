@@ -83,6 +83,9 @@ jobs:
       - name: Run hedged request admission tests
         run: PYTHONPATH=labs/19-hedged-requests python -m unittest discover -s labs/19-hedged-requests/tests -v
 
+      - name: Run adaptive concurrency limit tests
+        run: PYTHONPATH=labs/20-adaptive-concurrency-limits python -m unittest discover -s labs/20-adaptive-concurrency-limits/tests -v
+
       - name: Validate interactive lab bench JavaScript
         run: node --check site/app.js
 
