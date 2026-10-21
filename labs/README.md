@@ -23,6 +23,7 @@ This directory is the current index of implemented Field Labs. Each lab is a sel
 | [17](17-request-coalescing/) | Request Coalescing | Duplicate in-flight demand and bounded downstream work |
 | [18](18-stale-cache-fallback/) | Stale Cache Fallback | Freshness boundaries, bounded stale delivery, and revalidation intent |
 | [19](19-hedged-requests/) | Hedged Requests | Bounded duplicate admission, race outcomes, and timeline consistency |
+| [20](20-adaptive-concurrency-limits/) | Adaptive Concurrency Limits | Bounded feedback, window aggregation, controller state, and stabilization |
 
 ## Reading the labs
 
