@@ -42,6 +42,13 @@ class LimitDecision:
     reason: str
 
 
+@dataclass(frozen=True)
+class ControllerTrace:
+    initial_limit: int
+    final_limit: int
+    decisions: tuple[LimitDecision, ...]
+
+
 def _validate_current_limit(current_limit: int, policy: LimitPolicy) -> None:
     if not policy.minimum <= current_limit <= policy.maximum:
         raise ValueError("current_limit must be within policy bounds")
@@ -96,6 +103,26 @@ def update_limit_from_window(
         )
 
     return LimitDecision(current_limit, _increase(current_limit, policy), "window_healthy")
+
+
+def run_feedback_trace(
+    initial_limit: int,
+    windows: Sequence[Sequence[Sample]],
+    policy: LimitPolicy,
+) -> ControllerTrace:
+    """Apply complete feedback windows sequentially to one bounded controller state."""
+    _validate_current_limit(initial_limit, policy)
+    if not windows:
+        raise ValueError("feedback trace must contain at least one window")
+
+    current_limit = initial_limit
+    decisions: list[LimitDecision] = []
+    for samples in windows:
+        decision = update_limit_from_window(current_limit, samples, policy)
+        decisions.append(decision)
+        current_limit = decision.next_limit
+
+    return ControllerTrace(initial_limit, current_limit, tuple(decisions))
 
 
 def admit(in_flight: int, concurrency_limit: int) -> bool:

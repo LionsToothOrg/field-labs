@@ -4,6 +4,7 @@ from adaptive_concurrency import (
     LimitPolicy,
     Sample,
     admit,
+    run_feedback_trace,
     update_limit,
     update_limit_from_window,
 )
@@ -97,6 +98,52 @@ class AdaptiveConcurrencyTests(unittest.TestCase):
     def test_mixed_targets_fail(self):
         with self.assertRaises(ValueError):
             update_limit_from_window(4, [Sample(20, 50), Sample(20, 60)], self.policy)
+
+    def test_feedback_trace_carries_limit_between_windows(self):
+        trace = run_feedback_trace(
+            4,
+            [
+                [Sample(30, 50), Sample(40, 50)],
+                [Sample(70, 50), Sample(60, 50)],
+                [Sample(20, 50), Sample(30, 50)],
+            ],
+            self.policy,
+        )
+        self.assertEqual(trace.initial_limit, 4)
+        self.assertEqual(trace.final_limit, 3)
+        self.assertEqual(
+            [(d.previous_limit, d.next_limit, d.reason) for d in trace.decisions],
+            [
+                (4, 5, "window_healthy"),
+                (5, 2, "window_latency_above_target"),
+                (2, 3, "window_healthy"),
+            ],
+        )
+
+    def test_feedback_trace_preserves_bounds_across_repeated_windows(self):
+        trace = run_feedback_trace(
+            9,
+            [
+                [Sample(10, 50)],
+                [Sample(10, 50)],
+                [Sample(10, 50)],
+            ],
+            self.policy,
+        )
+        self.assertEqual([d.next_limit for d in trace.decisions], [10, 10, 10])
+        self.assertEqual(trace.final_limit, 10)
+
+    def test_feedback_trace_stops_on_invalid_window(self):
+        with self.assertRaises(ValueError):
+            run_feedback_trace(
+                4,
+                [[Sample(20, 50)], [], [Sample(20, 50)]],
+                self.policy,
+            )
+
+    def test_empty_feedback_trace_fails(self):
+        with self.assertRaises(ValueError):
+            run_feedback_trace(4, [], self.policy)
 
 
 if __name__ == "__main__":
