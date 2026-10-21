@@ -56,6 +56,8 @@ class AdaptiveConcurrencyTests(unittest.TestCase):
             LimitPolicy(2, 1)
         with self.assertRaises(ValueError):
             LimitPolicy(2, 10, decrease_ratio=1.0)
+        with self.assertRaises(ValueError):
+            LimitPolicy(2, 10, latency_tolerance_ms=-1)
 
     def test_healthy_window_increases_once(self):
         decision = update_limit_from_window(
@@ -144,6 +146,41 @@ class AdaptiveConcurrencyTests(unittest.TestCase):
     def test_empty_feedback_trace_fails(self):
         with self.assertRaises(ValueError):
             run_feedback_trace(4, [], self.policy)
+
+    def test_tolerance_holds_limit_near_target(self):
+        policy = LimitPolicy(2, 10, latency_tolerance_ms=5)
+        self.assertEqual(
+            (update_limit(6, Sample(45, 50), policy).next_limit, update_limit(6, Sample(45, 50), policy).reason),
+            (6, "within_tolerance"),
+        )
+        self.assertEqual(update_limit(6, Sample(55, 50), policy).next_limit, 6)
+
+    def test_tolerance_changes_only_outside_band(self):
+        policy = LimitPolicy(2, 10, latency_tolerance_ms=5)
+        self.assertEqual(update_limit(6, Sample(44, 50), policy).next_limit, 7)
+        self.assertEqual(update_limit(6, Sample(56, 50), policy).next_limit, 3)
+
+    def test_window_tolerance_uses_exact_aggregate_boundary(self):
+        policy = LimitPolicy(2, 10, latency_tolerance_ms=5)
+        decision = update_limit_from_window(6, [Sample(40, 50), Sample(70, 50)], policy)
+        self.assertEqual((decision.next_limit, decision.reason), (6, "window_within_tolerance"))
+
+    def test_overload_still_wins_inside_tolerance(self):
+        policy = LimitPolicy(2, 10, latency_tolerance_ms=5)
+        decision = update_limit_from_window(
+            6, [Sample(50, 50), Sample(50, 50, overloaded=True)], policy
+        )
+        self.assertEqual((decision.next_limit, decision.reason), (3, "window_overload"))
+
+    def test_tolerance_stabilizes_bounded_trace(self):
+        policy = LimitPolicy(2, 10, latency_tolerance_ms=5)
+        trace = run_feedback_trace(
+            6,
+            [[Sample(47, 50)], [Sample(53, 50)], [Sample(50, 50)]],
+            policy,
+        )
+        self.assertEqual([decision.next_limit for decision in trace.decisions], [6, 6, 6])
+        self.assertEqual(trace.final_limit, 6)
 
 
 if __name__ == "__main__":
