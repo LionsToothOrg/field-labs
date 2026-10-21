@@ -1,6 +1,7 @@
 """Deterministic adaptive concurrency-limit model for synthetic experiments."""
 
 from dataclasses import dataclass
+from typing import Sequence
 
 
 @dataclass(frozen=True)
@@ -41,25 +42,60 @@ class LimitDecision:
     reason: str
 
 
-def update_limit(current_limit: int, sample: Sample, policy: LimitPolicy) -> LimitDecision:
-    """Update a bounded limit from one synthetic feedback sample.
-
-    Overload or latency above the target causes multiplicative decrease.
-    Healthy latency at or below the target causes additive increase.
-    The result is always clamped to the configured bounds.
-    """
+def _validate_current_limit(current_limit: int, policy: LimitPolicy) -> None:
     if not policy.minimum <= current_limit <= policy.maximum:
         raise ValueError("current_limit must be within policy bounds")
 
+
+def _decrease(current_limit: int, policy: LimitPolicy) -> int:
+    return max(policy.minimum, int(current_limit * policy.decrease_ratio))
+
+
+def _increase(current_limit: int, policy: LimitPolicy) -> int:
+    return min(policy.maximum, current_limit + policy.increase_by)
+
+
+def update_limit(current_limit: int, sample: Sample, policy: LimitPolicy) -> LimitDecision:
+    """Update a bounded limit from one synthetic feedback sample."""
+    _validate_current_limit(current_limit, policy)
+
     if sample.overloaded or sample.latency_ms > sample.target_latency_ms:
-        proposed = int(current_limit * policy.decrease_ratio)
-        next_limit = max(policy.minimum, proposed)
+        next_limit = _decrease(current_limit, policy)
         reason = "overload" if sample.overloaded else "latency_above_target"
     else:
-        next_limit = min(policy.maximum, current_limit + policy.increase_by)
+        next_limit = _increase(current_limit, policy)
         reason = "healthy"
 
     return LimitDecision(current_limit, next_limit, reason)
+
+
+def update_limit_from_window(
+    current_limit: int, samples: Sequence[Sample], policy: LimitPolicy
+) -> LimitDecision:
+    """Update once from a complete synthetic feedback window.
+
+    All samples must use the same target. Any explicit overload signal wins over
+    latency aggregation. Otherwise the arithmetic mean latency is compared with
+    the shared target without rounding.
+    """
+    _validate_current_limit(current_limit, policy)
+    if not samples:
+        raise ValueError("feedback window must contain at least one sample")
+
+    target = samples[0].target_latency_ms
+    if any(sample.target_latency_ms != target for sample in samples):
+        raise ValueError("feedback window samples must share one target latency")
+
+    if any(sample.overloaded for sample in samples):
+        return LimitDecision(current_limit, _decrease(current_limit, policy), "window_overload")
+
+    total_latency = sum(sample.latency_ms for sample in samples)
+    if total_latency > target * len(samples):
+        return LimitDecision(
+            current_limit, _decrease(current_limit, policy), "window_latency_above_target"
+        )
+
+    return LimitDecision(current_limit, _increase(current_limit, policy), "window_healthy")
 
 
 def admit(in_flight: int, concurrency_limit: int) -> bool:

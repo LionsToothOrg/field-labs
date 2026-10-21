@@ -17,6 +17,14 @@ A healthy sample at or below the target latency increases the limit by the confi
 
 The policy rejects malformed bounds, invalid samples, and current limits outside the configured range rather than silently inventing a valid state.
 
+## Second slice: feedback windows
+
+`update_limit_from_window` makes one limit decision from a non-empty sequence of synthetic samples rather than changing the limit after every observation. Samples in a window must share one target latency.
+
+An explicit overload signal anywhere in the window causes a decrease. Otherwise, the arithmetic mean latency is compared with the shared target: a mean at or below target permits one additive increase, while a mean above target causes one multiplicative decrease. The comparison uses the exact latency sum rather than a rounded mean.
+
+This makes the experiment's aggregation boundary explicit: an isolated slow sample does not automatically force a decrease when the complete window remains healthy, while an overload signal is never averaged away.
+
 ## Reproduce
 
 ```bash
@@ -24,14 +32,14 @@ PYTHONPATH=labs/20-adaptive-concurrency-limits \
   python -m unittest discover -s labs/20-adaptive-concurrency-limits/tests -v
 ```
 
-The focused suite covers healthy growth, the target boundary, maximum/minimum clamping, latency-driven reduction, explicit overload precedence, admission at the limit, and invalid inputs.
+The focused suite covers single-sample bounded feedback plus healthy and degraded windows, the exact target boundary, isolated slow observations, overload precedence, empty windows, and inconsistent targets.
 
 ## What this evidence supports
 
-The tests demonstrate deterministic behavior for this synthetic control rule and its bounds. They do not demonstrate that these constants are appropriate for a real workload or that the model improves production latency or throughput.
+The tests demonstrate deterministic behavior for these synthetic control rules and their bounds. They do not demonstrate that the constants, arithmetic mean, or any particular window size are appropriate for a real workload, or that the model improves production latency or throughput.
 
 ## Limitations and next experiments
 
-This slice intentionally does **not** model asynchronous requests, rolling latency windows, percentile estimation, minimum RTT, queueing delay, sample weighting, oscillation damping, distributed coordination, retries, cancellation, or downstream capacity. A later slice can explore feedback-window semantics before any claim about adaptive behavior under a trace is warranted.
+This lab still does **not** model asynchronous requests, rolling/time-based windows, percentile estimation, minimum RTT, queueing delay, sample weighting, oscillation damping, distributed coordination, retries, cancellation, or downstream capacity. A later slice can model sequential windows and explicit controller state before making any claim about adaptation across a synthetic trace.
 
 All identifiers and measurements in this lab are fabricated for the experiment.

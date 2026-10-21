@@ -1,6 +1,12 @@
 import unittest
 
-from adaptive_concurrency import LimitPolicy, Sample, admit, update_limit
+from adaptive_concurrency import (
+    LimitPolicy,
+    Sample,
+    admit,
+    update_limit,
+    update_limit_from_window,
+)
 
 
 class AdaptiveConcurrencyTests(unittest.TestCase):
@@ -49,6 +55,48 @@ class AdaptiveConcurrencyTests(unittest.TestCase):
             LimitPolicy(2, 1)
         with self.assertRaises(ValueError):
             LimitPolicy(2, 10, decrease_ratio=1.0)
+
+    def test_healthy_window_increases_once(self):
+        decision = update_limit_from_window(
+            4, [Sample(40, 50), Sample(45, 50), Sample(50, 50)], self.policy
+        )
+        self.assertEqual((decision.next_limit, decision.reason), (5, "window_healthy"))
+
+    def test_isolated_slow_sample_does_not_force_decrease_when_mean_is_healthy(self):
+        decision = update_limit_from_window(
+            6, [Sample(20, 50), Sample(80, 50), Sample(20, 50)], self.policy
+        )
+        self.assertEqual((decision.next_limit, decision.reason), (7, "window_healthy"))
+
+    def test_slow_window_reduces_once(self):
+        decision = update_limit_from_window(
+            8, [Sample(60, 50), Sample(55, 50), Sample(50, 50)], self.policy
+        )
+        self.assertEqual(
+            (decision.next_limit, decision.reason), (4, "window_latency_above_target")
+        )
+
+    def test_window_mean_at_target_is_healthy(self):
+        decision = update_limit_from_window(
+            4, [Sample(40, 50), Sample(60, 50)], self.policy
+        )
+        self.assertEqual((decision.next_limit, decision.reason), (5, "window_healthy"))
+
+    def test_any_overload_signal_reduces_window(self):
+        decision = update_limit_from_window(
+            8,
+            [Sample(10, 50), Sample(10, 50, overloaded=True), Sample(10, 50)],
+            self.policy,
+        )
+        self.assertEqual((decision.next_limit, decision.reason), (4, "window_overload"))
+
+    def test_empty_window_fails(self):
+        with self.assertRaises(ValueError):
+            update_limit_from_window(4, [], self.policy)
+
+    def test_mixed_targets_fail(self):
+        with self.assertRaises(ValueError):
+            update_limit_from_window(4, [Sample(20, 50), Sample(20, 60)], self.policy)
 
 
 if __name__ == "__main__":
