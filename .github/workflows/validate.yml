@@ -86,6 +86,9 @@ jobs:
       - name: Run adaptive concurrency limit tests
         run: PYTHONPATH=labs/20-adaptive-concurrency-limits python -m unittest discover -s labs/20-adaptive-concurrency-limits/tests -v
 
+      - name: Run stable request routing tests
+        run: PYTHONPATH=labs/21-stable-request-routing python -m unittest discover -s labs/21-stable-request-routing/tests -v
+
       - name: Validate interactive lab bench JavaScript
         run: node --check site/app.js
 
