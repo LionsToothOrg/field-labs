@@ -52,7 +52,7 @@ A useful Field Lab has a narrow question, a reproducible baseline, an intentiona
 
 # ⌬ THE LAB BENCH
 
-All twenty current labs have implemented slices. Their individual READMEs define the evidence, scope, and limitations for each experiment.
+All twenty-one current labs have implemented slices. Their individual READMEs define the evidence, scope, and limitations for each experiment.
 
 | ID | Experiment | Engineering focus |
 | :-- | :-- | :-- |
@@ -76,6 +76,7 @@ All twenty current labs have implemented slices. Their individual READMEs define
 | **[18](labs/18-stale-cache-fallback/)** | **Stale Cache Fallback** | Freshness boundaries, bounded stale delivery, and revalidation intent |
 | **[19](labs/19-hedged-requests/)** | **Hedged Requests** | Bounded duplicate admission, race outcomes, and timeline consistency |
 | **[20](labs/20-adaptive-concurrency-limits/)** | **Adaptive Concurrency Limits** | Bounded feedback, window aggregation, controller state, and stabilization |
+| **[21](labs/21-stable-request-routing/)** | **Stable Request Routing** | Deterministic rendezvous routing, membership churn, and ownership inspection |
 
 [**BROWSE THE FULL LAB CATALOG →**](labs/)
 
