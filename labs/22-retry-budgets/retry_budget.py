@@ -13,6 +13,29 @@ class RetryClassification(Enum):
     NON_RETRYABLE = "non_retryable"
 
 
+class RetryDecisionOutcome(Enum):
+    """Inspectable result of one synthetic retry decision."""
+
+    ADMITTED = "admitted"
+    POLICY_SKIPPED = "policy_skipped"
+    BUDGET_REJECTED = "budget_rejected"
+
+
+@dataclass(frozen=True)
+class RetryDecision:
+    """Structured evidence for one synthetic retry-policy decision."""
+
+    classification: RetryClassification
+    outcome: RetryDecisionOutcome
+    retry_limit: int
+    retries_remaining: int
+    window_started_at: float | None = None
+
+    @property
+    def admitted(self) -> bool:
+        return self.outcome is RetryDecisionOutcome.ADMITTED
+
+
 @dataclass(frozen=True)
 class RetryBudgetSnapshot:
     """Inspectable counters for one synthetic retry-budget window."""
@@ -105,6 +128,20 @@ class RetryBudget:
         proportional = math.floor(self._originals * self._ratio)
         return max(self._minimum_retries, proportional)
 
+    def _decision(
+        self,
+        classification: RetryClassification,
+        outcome: RetryDecisionOutcome,
+        limit: int,
+    ) -> RetryDecision:
+        return RetryDecision(
+            classification=classification,
+            outcome=outcome,
+            retry_limit=limit,
+            retries_remaining=max(0, limit - self._retries_admitted),
+            window_started_at=self._window_started_at,
+        )
+
     @property
     def retry_limit(self) -> int:
         self._roll_window_if_needed()
@@ -119,25 +156,35 @@ class RetryBudget:
     def try_acquire_retry(self) -> bool:
         """Admit a retryable attempt while the active window has capacity."""
 
-        return self.try_acquire_for(RetryClassification.RETRYABLE)
+        return self.decide_for(RetryClassification.RETRYABLE).admitted
 
     def try_acquire_for(self, classification: RetryClassification) -> bool:
-        """Apply retry policy before consulting or consuming budget capacity."""
+        """Apply retry policy and return whether the synthetic retry was admitted."""
+
+        return self.decide_for(classification).admitted
+
+    def decide_for(self, classification: RetryClassification) -> RetryDecision:
+        """Return structured evidence for one synthetic retry-policy decision."""
 
         if not isinstance(classification, RetryClassification):
             raise TypeError("classification must be a RetryClassification")
 
         self._roll_window_if_needed()
+        limit = self._retry_limit()
         if classification is RetryClassification.NON_RETRYABLE:
             self._retries_skipped += 1
-            return False
+            return self._decision(
+                classification, RetryDecisionOutcome.POLICY_SKIPPED, limit
+            )
 
-        limit = self._retry_limit()
         if self._retries_admitted >= limit:
             self._retries_rejected += 1
-            return False
+            return self._decision(
+                classification, RetryDecisionOutcome.BUDGET_REJECTED, limit
+            )
+
         self._retries_admitted += 1
-        return True
+        return self._decision(classification, RetryDecisionOutcome.ADMITTED, limit)
 
     def snapshot(self) -> RetryBudgetSnapshot:
         self._roll_window_if_needed()

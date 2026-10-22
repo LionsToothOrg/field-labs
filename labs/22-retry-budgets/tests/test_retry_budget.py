@@ -1,6 +1,10 @@
 import unittest
 
-from retry_budget import RetryBudget, RetryClassification
+from retry_budget import (
+    RetryBudget,
+    RetryClassification,
+    RetryDecisionOutcome,
+)
 
 
 class SyntheticClock:
@@ -93,6 +97,49 @@ class RetryBudgetTests(unittest.TestCase):
         self.assertEqual(snapshot.retries_admitted, 1)
         self.assertEqual(snapshot.retries_rejected, 1)
         self.assertEqual(snapshot.retries_skipped, 0)
+
+    def test_structured_decision_reports_admission(self) -> None:
+        budget = RetryBudget(ratio=0.5)
+        for _ in range(4):
+            budget.record_original()
+
+        decision = budget.decide_for(RetryClassification.RETRYABLE)
+
+        self.assertTrue(decision.admitted)
+        self.assertEqual(decision.outcome, RetryDecisionOutcome.ADMITTED)
+        self.assertEqual(decision.classification, RetryClassification.RETRYABLE)
+        self.assertEqual(decision.retry_limit, 2)
+        self.assertEqual(decision.retries_remaining, 1)
+        self.assertIsNone(decision.window_started_at)
+
+    def test_structured_decisions_distinguish_skip_from_budget_rejection(self) -> None:
+        budget = RetryBudget(ratio=0.5)
+        for _ in range(2):
+            budget.record_original()
+
+        skipped = budget.decide_for(RetryClassification.NON_RETRYABLE)
+        admitted = budget.decide_for(RetryClassification.RETRYABLE)
+        rejected = budget.decide_for(RetryClassification.RETRYABLE)
+
+        self.assertEqual(skipped.outcome, RetryDecisionOutcome.POLICY_SKIPPED)
+        self.assertFalse(skipped.admitted)
+        self.assertEqual(skipped.retries_remaining, 1)
+        self.assertEqual(admitted.outcome, RetryDecisionOutcome.ADMITTED)
+        self.assertEqual(admitted.retries_remaining, 0)
+        self.assertEqual(rejected.outcome, RetryDecisionOutcome.BUDGET_REJECTED)
+        self.assertFalse(rejected.admitted)
+        self.assertEqual(rejected.retries_remaining, 0)
+
+    def test_structured_decision_includes_active_synthetic_window(self) -> None:
+        clock = SyntheticClock(20.0)
+        budget = RetryBudget(ratio=1, window_seconds=10, clock=clock)
+        budget.record_original()
+
+        decision = budget.decide_for(RetryClassification.RETRYABLE)
+
+        self.assertEqual(decision.window_started_at, 20.0)
+        self.assertEqual(decision.retry_limit, 1)
+        self.assertEqual(decision.retries_remaining, 0)
 
     def test_invalid_retry_classification_is_rejected(self) -> None:
         budget = RetryBudget(ratio=0.5)
