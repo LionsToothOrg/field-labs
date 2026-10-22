@@ -14,6 +14,8 @@ The third slice makes retry policy explicit. Synthetic outcomes are classified a
 
 The fourth slice exposes each policy check as an immutable structured decision. A decision records its synthetic classification, whether it was admitted, policy-skipped, or budget-rejected, the retry limit and remaining capacity after the decision, and the active fabricated window boundary when windowing is enabled. Existing boolean admission methods delegate to the same decision path, so inspectability does not create a second policy implementation.
 
+The final slice exercises those pieces as one deterministic mixed-decision sequence. It demonstrates that a policy skip preserves capacity, admitted retries consume it, exhaustion is explicit, and fixed-window rollover clears prior decision accounting before new synthetic demand is evaluated.
+
 The model also exposes aggregate snapshots for the active window. Together, decisions and snapshots make policy, admission, rollover, and capacity changes inspectable without logging infrastructure or production observability dependencies.
 
 ## Run the tests
@@ -37,6 +39,7 @@ The tests verify that:
 - structured decisions distinguish admission, policy skips, and budget rejection;
 - structured decisions report post-decision capacity and the active synthetic window;
 - boolean admission methods use the same decision path;
+- a deterministic mixed-decision sequence shows capacity preservation, consumption, exhaustion, and reset at rollover;
 - unsupported classification values fail explicitly;
 - a synthetic clock rolls the budget exactly at the configured boundary;
 - demand and retry accounting from an expired window no longer contribute to the active window;
@@ -46,6 +49,10 @@ The tests verify that:
 
 All counters, classifications, decisions, request activity, and clock values in this lab are fabricated. No production traffic or private system behavior is represented.
 
-## Limitations and next experiments
+## Stopping point
 
-The current implementation is a single-process fixed-window model with a deliberately binary retry policy and in-memory decision evidence. It does **not** model rolling/sliding windows, distributed coordination, per-endpoint policies, protocol-specific status codes, concurrency, latency, backoff scheduling, persistent event storage, or production traffic. A useful next increment is to define a concise stopping point for the lab and add a deterministic decision-sequence scenario that demonstrates how capacity changes across mixed synthetic outcomes before cataloging the completed experiment.
+Lab 22 is intentionally complete when the bounded retry policy, deterministic fixed-window lifecycle, binary retry classification, structured decision evidence, and mixed-decision sequence are all validated together. Extending the experiment into distributed coordination, protocol-aware policy, concurrency, backoff, or persistence would change the question enough to deserve a separate lab rather than expanding this one indefinitely.
+
+## Limitations
+
+The completed experiment is a single-process fixed-window model with a deliberately binary retry policy and in-memory decision evidence. It does **not** model rolling/sliding windows, distributed coordination, per-endpoint policies, protocol-specific status codes, concurrency, latency, backoff scheduling, persistent event storage, or production traffic.

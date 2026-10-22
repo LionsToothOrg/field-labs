@@ -75,9 +75,7 @@ class RetryBudgetTests(unittest.TestCase):
         for _ in range(4):
             budget.record_original()
 
-        self.assertFalse(
-            budget.try_acquire_for(RetryClassification.NON_RETRYABLE)
-        )
+        self.assertFalse(budget.try_acquire_for(RetryClassification.NON_RETRYABLE))
         snapshot = budget.snapshot()
 
         self.assertEqual(snapshot.retries_skipped, 1)
@@ -141,6 +139,40 @@ class RetryBudgetTests(unittest.TestCase):
         self.assertEqual(decision.retry_limit, 1)
         self.assertEqual(decision.retries_remaining, 0)
 
+    def test_mixed_decision_sequence_resets_capacity_at_window_rollover(self) -> None:
+        clock = SyntheticClock(50.0)
+        budget = RetryBudget(ratio=0.5, window_seconds=10, clock=clock)
+        for _ in range(4):
+            budget.record_original()
+
+        skipped = budget.decide_for(RetryClassification.NON_RETRYABLE)
+        first = budget.decide_for(RetryClassification.RETRYABLE)
+        second = budget.decide_for(RetryClassification.RETRYABLE)
+        exhausted = budget.decide_for(RetryClassification.RETRYABLE)
+
+        self.assertEqual(skipped.outcome, RetryDecisionOutcome.POLICY_SKIPPED)
+        self.assertEqual(skipped.retries_remaining, 2)
+        self.assertEqual(first.outcome, RetryDecisionOutcome.ADMITTED)
+        self.assertEqual(first.retries_remaining, 1)
+        self.assertEqual(second.outcome, RetryDecisionOutcome.ADMITTED)
+        self.assertEqual(second.retries_remaining, 0)
+        self.assertEqual(exhausted.outcome, RetryDecisionOutcome.BUDGET_REJECTED)
+        self.assertEqual(exhausted.retries_remaining, 0)
+
+        clock.advance(10)
+        budget.record_original()
+        rolled = budget.decide_for(RetryClassification.RETRYABLE)
+
+        self.assertEqual(rolled.window_started_at, 60.0)
+        self.assertEqual(rolled.outcome, RetryDecisionOutcome.BUDGET_REJECTED)
+        self.assertEqual(rolled.retry_limit, 0)
+        self.assertEqual(rolled.retries_remaining, 0)
+        snapshot = budget.snapshot()
+        self.assertEqual(snapshot.originals, 1)
+        self.assertEqual(snapshot.retries_admitted, 0)
+        self.assertEqual(snapshot.retries_rejected, 1)
+        self.assertEqual(snapshot.retries_skipped, 0)
+
     def test_invalid_retry_classification_is_rejected(self) -> None:
         budget = RetryBudget(ratio=0.5)
 
@@ -153,9 +185,7 @@ class RetryBudgetTests(unittest.TestCase):
         for _ in range(4):
             budget.record_original()
         self.assertTrue(budget.try_acquire_retry())
-        self.assertFalse(
-            budget.try_acquire_for(RetryClassification.NON_RETRYABLE)
-        )
+        self.assertFalse(budget.try_acquire_for(RetryClassification.NON_RETRYABLE))
         self.assertEqual(budget.snapshot().retry_limit, 2)
 
         clock.advance(10)
