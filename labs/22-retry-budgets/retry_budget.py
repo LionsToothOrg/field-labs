@@ -1,8 +1,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import Enum
 import math
 from typing import Callable
+
+
+class RetryClassification(Enum):
+    """Synthetic retry-policy decision for an observed outcome."""
+
+    RETRYABLE = "retryable"
+    NON_RETRYABLE = "non_retryable"
 
 
 @dataclass(frozen=True)
@@ -12,6 +20,7 @@ class RetryBudgetSnapshot:
     originals: int
     retries_admitted: int
     retries_rejected: int
+    retries_skipped: int
     retry_limit: int
     retries_remaining: int
     window_started_at: float | None = None
@@ -60,6 +69,7 @@ class RetryBudget:
         self._originals = 0
         self._retries_admitted = 0
         self._retries_rejected = 0
+        self._retries_skipped = 0
 
     def _read_clock(self) -> float:
         assert self._clock is not None
@@ -89,12 +99,16 @@ class RetryBudget:
             self._originals = 0
             self._retries_admitted = 0
             self._retries_rejected = 0
+            self._retries_skipped = 0
+
+    def _retry_limit(self) -> int:
+        proportional = math.floor(self._originals * self._ratio)
+        return max(self._minimum_retries, proportional)
 
     @property
     def retry_limit(self) -> int:
         self._roll_window_if_needed()
-        proportional = math.floor(self._originals * self._ratio)
-        return max(self._minimum_retries, proportional)
+        return self._retry_limit()
 
     def record_original(self) -> None:
         """Record one synthetic non-retry attempt in the active window."""
@@ -103,11 +117,22 @@ class RetryBudget:
         self._originals += 1
 
     def try_acquire_retry(self) -> bool:
-        """Admit a retry only while the active synthetic window has capacity."""
+        """Admit a retryable attempt while the active window has capacity."""
+
+        return self.try_acquire_for(RetryClassification.RETRYABLE)
+
+    def try_acquire_for(self, classification: RetryClassification) -> bool:
+        """Apply retry policy before consulting or consuming budget capacity."""
+
+        if not isinstance(classification, RetryClassification):
+            raise TypeError("classification must be a RetryClassification")
 
         self._roll_window_if_needed()
-        proportional = math.floor(self._originals * self._ratio)
-        limit = max(self._minimum_retries, proportional)
+        if classification is RetryClassification.NON_RETRYABLE:
+            self._retries_skipped += 1
+            return False
+
+        limit = self._retry_limit()
         if self._retries_admitted >= limit:
             self._retries_rejected += 1
             return False
@@ -116,12 +141,12 @@ class RetryBudget:
 
     def snapshot(self) -> RetryBudgetSnapshot:
         self._roll_window_if_needed()
-        proportional = math.floor(self._originals * self._ratio)
-        limit = max(self._minimum_retries, proportional)
+        limit = self._retry_limit()
         return RetryBudgetSnapshot(
             originals=self._originals,
             retries_admitted=self._retries_admitted,
             retries_rejected=self._retries_rejected,
+            retries_skipped=self._retries_skipped,
             retry_limit=limit,
             retries_remaining=max(0, limit - self._retries_admitted),
             window_started_at=self._window_started_at,
