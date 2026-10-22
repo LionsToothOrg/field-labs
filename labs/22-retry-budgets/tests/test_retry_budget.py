@@ -1,6 +1,6 @@
 import unittest
 
-from retry_budget import RetryBudget
+from retry_budget import RetryBudget, RetryClassification
 
 
 class SyntheticClock:
@@ -28,6 +28,7 @@ class RetryBudgetTests(unittest.TestCase):
         self.assertEqual(snapshot.retry_limit, 2)
         self.assertEqual(snapshot.retries_admitted, 2)
         self.assertEqual(snapshot.retries_rejected, 1)
+        self.assertEqual(snapshot.retries_skipped, 0)
         self.assertEqual(snapshot.retries_remaining, 0)
 
     def test_budget_grows_as_original_attempts_accumulate(self) -> None:
@@ -65,12 +66,49 @@ class RetryBudgetTests(unittest.TestCase):
 
         self.assertEqual(budget.snapshot().retry_limit, 1)
 
+    def test_non_retryable_outcome_skips_budget_without_consuming_capacity(self) -> None:
+        budget = RetryBudget(ratio=0.5)
+        for _ in range(4):
+            budget.record_original()
+
+        self.assertFalse(
+            budget.try_acquire_for(RetryClassification.NON_RETRYABLE)
+        )
+        snapshot = budget.snapshot()
+
+        self.assertEqual(snapshot.retries_skipped, 1)
+        self.assertEqual(snapshot.retries_admitted, 0)
+        self.assertEqual(snapshot.retries_rejected, 0)
+        self.assertEqual(snapshot.retries_remaining, 2)
+
+    def test_retryable_outcome_uses_the_same_bounded_capacity(self) -> None:
+        budget = RetryBudget(ratio=0.5)
+        for _ in range(2):
+            budget.record_original()
+
+        self.assertTrue(budget.try_acquire_for(RetryClassification.RETRYABLE))
+        self.assertFalse(budget.try_acquire_for(RetryClassification.RETRYABLE))
+
+        snapshot = budget.snapshot()
+        self.assertEqual(snapshot.retries_admitted, 1)
+        self.assertEqual(snapshot.retries_rejected, 1)
+        self.assertEqual(snapshot.retries_skipped, 0)
+
+    def test_invalid_retry_classification_is_rejected(self) -> None:
+        budget = RetryBudget(ratio=0.5)
+
+        with self.assertRaises(TypeError):
+            budget.try_acquire_for("retryable")  # type: ignore[arg-type]
+
     def test_window_rollover_expires_old_demand_and_retry_usage(self) -> None:
         clock = SyntheticClock(100.0)
         budget = RetryBudget(ratio=0.5, window_seconds=10, clock=clock)
         for _ in range(4):
             budget.record_original()
         self.assertTrue(budget.try_acquire_retry())
+        self.assertFalse(
+            budget.try_acquire_for(RetryClassification.NON_RETRYABLE)
+        )
         self.assertEqual(budget.snapshot().retry_limit, 2)
 
         clock.advance(10)
@@ -80,6 +118,7 @@ class RetryBudgetTests(unittest.TestCase):
         self.assertEqual(snapshot.originals, 0)
         self.assertEqual(snapshot.retries_admitted, 0)
         self.assertEqual(snapshot.retries_rejected, 0)
+        self.assertEqual(snapshot.retries_skipped, 0)
         self.assertEqual(snapshot.retry_limit, 0)
         self.assertFalse(budget.try_acquire_retry())
 
