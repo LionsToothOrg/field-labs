@@ -89,6 +89,9 @@ jobs:
       - name: Run stable request routing tests
         run: PYTHONPATH=labs/21-stable-request-routing python -m unittest discover -s labs/21-stable-request-routing/tests -v
 
+      - name: Run retry budget tests
+        run: PYTHONPATH=labs/22-retry-budgets python -m unittest discover -s labs/22-retry-budgets/tests -v
+
       - name: Validate interactive lab bench JavaScript
         run: node --check site/app.js
 
