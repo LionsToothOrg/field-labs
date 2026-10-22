@@ -12,7 +12,9 @@ The second slice adds deterministic fixed-window rollover. Windowed budgets requ
 
 The third slice makes retry policy explicit. Synthetic outcomes are classified as retryable or non-retryable before budget admission. Retryable outcomes compete for the same bounded capacity as before; non-retryable outcomes are skipped without consuming capacity and are counted separately from retries rejected because the budget is exhausted.
 
-The model exposes a snapshot containing original attempts, admitted retries, budget-rejected retries, policy-skipped retries, the current retry limit, remaining capacity, and—when windowing is enabled—the active window start. That makes policy, admission, and rollover decisions inspectable in tests.
+The fourth slice exposes each policy check as an immutable structured decision. A decision records its synthetic classification, whether it was admitted, policy-skipped, or budget-rejected, the retry limit and remaining capacity after the decision, and the active fabricated window boundary when windowing is enabled. Existing boolean admission methods delegate to the same decision path, so inspectability does not create a second policy implementation.
+
+The model also exposes aggregate snapshots for the active window. Together, decisions and snapshots make policy, admission, rollover, and capacity changes inspectable without logging infrastructure or production observability dependencies.
 
 ## Run the tests
 
@@ -32,6 +34,9 @@ The tests verify that:
 - non-retryable synthetic outcomes do not consume retry capacity;
 - policy-skipped outcomes remain distinguishable from budget rejection;
 - retryable synthetic outcomes still obey the configured budget;
+- structured decisions distinguish admission, policy skips, and budget rejection;
+- structured decisions report post-decision capacity and the active synthetic window;
+- boolean admission methods use the same decision path;
 - unsupported classification values fail explicitly;
 - a synthetic clock rolls the budget exactly at the configured boundary;
 - demand and retry accounting from an expired window no longer contribute to the active window;
@@ -39,8 +44,8 @@ The tests verify that:
 - backward clock movement is rejected rather than silently corrupting window accounting; and
 - invalid ratios, allowances, and window configuration fail explicitly.
 
-All counters, classifications, request activity, and clock values in this lab are fabricated. No production traffic or private system behavior is represented.
+All counters, classifications, decisions, request activity, and clock values in this lab are fabricated. No production traffic or private system behavior is represented.
 
 ## Limitations and next experiments
 
-The current implementation is a single-process fixed-window model with a deliberately binary retry policy. It does **not** model rolling/sliding windows, distributed coordination, per-endpoint policies, protocol-specific status codes, concurrency, latency, backoff scheduling, or production traffic. A useful next increment is to inspect retry-budget decisions as structured events so the relationship between policy skips, budget rejection, and admitted retries can be validated without adding production observability dependencies.
+The current implementation is a single-process fixed-window model with a deliberately binary retry policy and in-memory decision evidence. It does **not** model rolling/sliding windows, distributed coordination, per-endpoint policies, protocol-specific status codes, concurrency, latency, backoff scheduling, persistent event storage, or production traffic. A useful next increment is to define a concise stopping point for the lab and add a deterministic decision-sequence scenario that demonstrates how capacity changes across mixed synthetic outcomes before cataloging the completed experiment.
